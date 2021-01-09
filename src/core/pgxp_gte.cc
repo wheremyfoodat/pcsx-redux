@@ -210,11 +210,8 @@ float PGXP_NCLIP() {
 }
 
 static PGXP_value PGXP_MFC2_int(uint32_t reg) {
-    switch (reg) {
-        case 15:
-            g_GTE_data_reg[reg] = SXYP = SXY2;
-            break;
-    }
+    if (reg == 15)
+        g_GTE_data_reg[15] = SXYP = SXY2;
 
     return g_GTE_data_reg[reg];
 }
