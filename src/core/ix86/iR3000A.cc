@@ -258,6 +258,7 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
     void testSWInt();
 
     void recRecompile();
+    void handleIdle();
 
     static uint32_t gteMFC2Wrapper() { return PCSX::g_emulator->m_gte->MFC2(); }
     static uint32_t gteCFC2Wrapper() { return PCSX::g_emulator->m_gte->CFC2(); }
@@ -2636,7 +2637,7 @@ void X86DynaRecCPU::recBEQ() {
         if (m_iRegs[_Rs_].k == m_iRegs[_Rt_].k) { // jump is always taken
             if ((uint16_t) _Imm_ == 0xFFFF) { // jump to self 
                 printf("Compiling idle loop!\n");
-                gen.ADD32ItoM((uint32_t)&m_psxRegs.cycle, 63);
+                handleIdle();
             }
 
             m_pcInEBP = true;
@@ -3199,6 +3200,20 @@ void X86DynaRecCPU::SetPGXPMode(uint32_t pgxpMode) {
 
     // reset to ensure new func tables are used
     Reset();
+}
+
+/// Handle idle loops
+void X86DynaRecCPU::handleIdle() { 
+    if (m_psxRegs.interrupt) {
+        PSXCPU_LOG("Idle loop that's waiting for an interrupt\n");
+        exit(1);
+    }
+
+    else {
+        PSXCPU_LOG("Compiling infinite idle loop\n");
+        gen.ADD32ItoM((uint32_t)&m_psxRegs.cycle, 8191); // the loop will never exit, so we always step by 1024 cycles
+                                                         // TODO: Find out how to make it go straight to the next frame
+    }
 }
 
 #else
