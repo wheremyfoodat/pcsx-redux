@@ -337,6 +337,10 @@ class R3000Acpu {
         ref = value;
     }
 
+    void popNextEvent() {
+
+    }
+
   protected:
     R3000Acpu(const std::string &name) : m_name(name) {}
     static inline const uint32_t MASKS[7] = {0, 0xffffff, 0xffff, 0xff, 0xff000000, 0xffff0000, 0xffffff00};
@@ -414,6 +418,7 @@ class R3000Acpu {
         }
         return spec;
     }
+
 
   public:
     /*

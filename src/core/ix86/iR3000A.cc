@@ -2633,7 +2633,12 @@ void X86DynaRecCPU::recBEQ() {
     if (target == m_pc + 4) return;
 
     if (IsConst(_Rs_) && IsConst(_Rt_)) {
-        if (m_iRegs[_Rs_].k == m_iRegs[_Rt_].k) {
+        if (m_iRegs[_Rs_].k == m_iRegs[_Rt_].k) { // jump is always taken
+            if ((uint16_t) _Imm_ == 0xFFFF) { // jump to self 
+                printf("Compiling idle loop!\n");
+                gen.ADD32ItoM((uint32_t)&m_psxRegs.cycle, 63);
+            }
+
             m_pcInEBP = true;
             m_stopRecompile = true;
             gen.MOV32ItoR(PCSX::ix86::EBP, target);
