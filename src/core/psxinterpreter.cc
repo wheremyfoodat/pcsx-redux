@@ -610,7 +610,16 @@ void InterpretedCPU::psxJAL() {
  * Register jump                                          *
  * Format:  OP rs, rd                                     *
  *********************************************************/
-void InterpretedCPU::psxJR() { doBranch(_u32(_rRs_)); }
+void InterpretedCPU::psxJR() { 
+    doBranch(_u32(_rRs_) & ~3); // the "& ~3" word-aligns the jump address
+
+    if (PCSX::g_emulator->settings.get<PCSX::Emulator::SettingDebug>()) { // if in debug mode, check for unaligned jump
+        if (_rRs_ & 3) {
+            PCSX::g_system->printf("Attempted unaligned JR!");
+            PCSX::g_system->printf("Exception fired!");
+        }
+    }
+}
 
 void InterpretedCPU::psxJALR() {
     uint32_t temp = _u32(_rRs_);
@@ -618,7 +627,14 @@ void InterpretedCPU::psxJALR() {
         _SetLink(_Rd_);
     }
     maybeCancelDelayedLoad(_Rd_);
-    doBranch(temp);
+    doBranch(temp & ~3); // the "& ~3" force aligns the address
+
+    if (PCSX::g_emulator->settings.get<PCSX::Emulator::SettingDebug>()) { // if in debug mode, check for unaligned jump
+        if (temp & 3) {
+            PCSX::g_system->printf("Attempted unaligned JR!");
+            PCSX::g_system->printf("Exception fired!");
+        }
+    }
 }
 
 /*********************************************************
