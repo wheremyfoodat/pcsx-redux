@@ -2601,9 +2601,10 @@ void X86DynaRecCPU::recJR() {
     m_stopRecompile = true;
     m_pcInEBP = true;
     if (IsConst(_Rs_)) {
-        gen.MOV32ItoR(PCSX::ix86::EBP, m_iRegs[_Rs_].k);
+        gen.MOV32ItoR(PCSX::ix86::EBP, m_iRegs[_Rs_].k & ~3); // force align jump address
     } else {
         gen.MOV32MtoR(PCSX::ix86::EBP, (uint32_t)&m_psxRegs.GPR.r[_Rs_]);
+        gen.AND32ItoR(PCSX::ix86::EBP, ~3); // force align jump address
     }
 }
 
@@ -2619,9 +2620,10 @@ void X86DynaRecCPU::recJALR() {
     m_stopRecompile = true;
     m_pcInEBP = true;
     if (IsConst(_Rs_)) {
-        gen.MOV32ItoR(PCSX::ix86::EBP, m_iRegs[_Rs_].k);
+        gen.MOV32ItoR(PCSX::ix86::EBP, m_iRegs[_Rs_].k & ~3); // force align jump address
     } else {
         gen.MOV32MtoR(PCSX::ix86::EBP, (uint32_t)&m_psxRegs.GPR.r[_Rs_]);
+        gen.AND32ItoR(PCSX::ix86::EBP, ~3); // force align jump address
     }
 }
 
