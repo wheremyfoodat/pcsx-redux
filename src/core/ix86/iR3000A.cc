@@ -2502,7 +2502,6 @@ void X86DynaRecCPU::recBGTZ() {
 void X86DynaRecCPU::recBLTZAL() {
     // Branch if Rs < 0
     uint32_t target = _Imm_ * 4 + m_pc;
-    gen.MOV32ItoR(PCSX::ix86::EDI, m_pc + 4);
     maybeCancelDelayedLoad(31);
 
     m_nextIsDelaySlot = true;
@@ -2512,6 +2511,7 @@ void X86DynaRecCPU::recBLTZAL() {
             auto &delayedLoad = m_delayedLoadInfo[m_currentDelayedLoad];
             delayedLoad.active = true;
             delayedLoad.index = 31;
+            gen.MOV32ItoR(PCSX::ix86::EDI, m_pc + 4);
             m_pcInEBP = true;
             m_stopRecompile = true;
             gen.MOV32ItoR(PCSX::ix86::EBP, target);
@@ -2524,10 +2524,13 @@ void X86DynaRecCPU::recBLTZAL() {
     auto &delayedLoad = m_delayedLoadInfo[m_currentDelayedLoad];
     delayedLoad.active = true;
     delayedLoad.index = 31;
+    gen.MOV32MtoR(PCSX::ix86::EDI, (uint32_t)&m_psxRegs.GPR.n.ra);
     m_pcInEBP = true;
     m_stopRecompile = true;
+    gen.MOV32ItoR(PCSX::ix86::EBP, m_pc + 4);
     gen.CMP32ItoM((uint32_t)&m_psxRegs.GPR.r[_Rs_], 0);
     unsigned slot = gen.JGE32(0);
+    gen.MOV32ItoR(PCSX::ix86::EDI, m_pc + 4);
     gen.MOV32ItoR(PCSX::ix86::EBP, target);
     gen.x86SetJ32(slot);
 }
@@ -2536,7 +2539,6 @@ void X86DynaRecCPU::recBGEZAL() {
     // Branch if Rs >= 0
     uint32_t target = _Imm_ * 4 + m_pc;
     maybeCancelDelayedLoad(31);
-    gen.MOV32ItoR(PCSX::ix86::EDI, m_pc + 4);
 
     m_nextIsDelaySlot = true;
     if (IsConst(_Rs_)) {
@@ -2545,6 +2547,7 @@ void X86DynaRecCPU::recBGEZAL() {
             auto &delayedLoad = m_delayedLoadInfo[m_currentDelayedLoad];
             delayedLoad.active = true;
             delayedLoad.index = 31;
+            gen.MOV32ItoR(PCSX::ix86::EDI, m_pc + 4);
             m_pcInEBP = true;
             m_stopRecompile = true;
             gen.MOV32ItoR(PCSX::ix86::EBP, target);
@@ -2557,10 +2560,13 @@ void X86DynaRecCPU::recBGEZAL() {
     auto &delayedLoad = m_delayedLoadInfo[m_currentDelayedLoad];
     delayedLoad.active = true;
     delayedLoad.index = 31;
+    gen.MOV32MtoR(PCSX::ix86::EDI, (uint32_t)&m_psxRegs.GPR.n.ra);
     m_pcInEBP = true;
     m_stopRecompile = true;
+    gen.MOV32ItoR(PCSX::ix86::EBP, m_pc + 4);
     gen.CMP32ItoM((uint32_t)&m_psxRegs.GPR.r[_Rs_], 0);
     unsigned slot = gen.JL32(0);
+    gen.MOV32ItoR(PCSX::ix86::EDI, m_pc + 4);
     gen.MOV32ItoR(PCSX::ix86::EBP, target);
     gen.x86SetJ32(slot);
 }
