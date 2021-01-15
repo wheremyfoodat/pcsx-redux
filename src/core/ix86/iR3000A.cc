@@ -3145,10 +3145,9 @@ void X86DynaRecCPU::recRecompile() {
     gen.ADD32ItoM((uint32_t)&m_psxRegs.cycle, count);
 
     if (m_pcInEBP) {
-        gen.AND32ItoR(PCSX::ix86::EBP, ~3);
         gen.MOV32RtoR(PCSX::ix86::EAX, PCSX::ix86::EBP);
     } else {
-        gen.MOV32ItoR(PCSX::ix86::EAX, m_pc & ~3);
+        gen.MOV32ItoR(PCSX::ix86::EAX, m_pc);
     }
 
     if (m_needsStackFrame || m_pcInEBP) {
