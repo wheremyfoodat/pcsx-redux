@@ -24,9 +24,6 @@
     <ClCompile Include="..\..\src\core\ix86\iR3000A.cc">
       <Filter>Source Files\ix86</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\core\ix86\LunaRec.cc">
-      <Filter>Source Files\ix86</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\src\core\ix86\ix86.cc">
       <Filter>Source Files\ix86</Filter>
     </ClCompile>
@@ -132,6 +129,9 @@
     <ClCompile Include="..\..\src\core\web-server.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\core\ix86\.h">
+      <Filter>Source Files\ix86</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\core\cdriso.h">
@@ -219,6 +219,9 @@
       <Filter>Header Files\ix86</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\core\ix86\Luna.hpp">
+      <Filter>Header Files\ix86</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\LunaRec.h">
       <Filter>Header Files\ix86</Filter>
     </ClInclude>
     <ClInclude Include="..\..\src\core\psxemulator.h">

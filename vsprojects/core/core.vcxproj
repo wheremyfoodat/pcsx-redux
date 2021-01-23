@@ -129,7 +129,7 @@
     <ClCompile Include="..\..\src\core\gpu.cc" />
     <ClCompile Include="..\..\src\core\gte.cc" />
     <ClCompile Include="..\..\src\core\ix86\iR3000A.cc" />
-    <ClCompile Include="..\..\src\core\ix86\LunaRec.cc" />
+    <ClCompile Include="..\..\src\core\ix86\LunaRec.h" />
     <ClCompile Include="..\..\src\core\ix86\ix86.cc" />
     <ClCompile Include="..\..\src\core\mdec.cc" />
     <ClCompile Include="..\..\src\core\misc.cc" />

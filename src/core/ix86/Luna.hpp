@@ -5,7 +5,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <cassert>
-#include <fstream>
 
 #if defined(_WIN32) || defined(WIN32)
 #include <windows.h>
@@ -863,13 +862,6 @@ public:
     write <u8> (rex); // REX
     write <u16> (0xB80F); // Opcode
     write <u8> (((dest & 7) << 3) | (src & 7) | (0b11 << 6)); // mod r/m   
-  }
-
-
-  void dump() {
-      std::ofstream file ("output.exe", std::ios::binary);
-      file.write ((const char*) buffer, bufferPtr);
-      // printf ("Dumped %d bytes\n", bufferPtr);
   }
 
   void flush() { // reset buffer

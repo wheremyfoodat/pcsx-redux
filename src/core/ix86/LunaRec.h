@@ -1,24 +1,38 @@
-#include <cassert>
+#pragma once
+#include "core/debug.h"
 #include "core/disr3000a.h"
+#include "core/gpu.h"
+#include "core/gte.h"
 #include "core/psxemulator.h"
 #include "core/r3000a.h"
 #include "core/system.h"
 #include "core/ix86/Luna.hpp"
 using namespace Luna;
 
-
-#if defined(__x86_64) || defined(_M_AMD64)  // if 64-bit
-namespace {
-const auto KILOYBTE = 1024;
-const auto MEGABYTE = 1024 * KILOYBTE;
-const auto registerPointer = rbp;  // RBP is used as a pointer to the register array
-
 class X86DynaRecCPU : public PCSX::R3000Acpu {
+    
+    const int KILOYBTE = 1024;
+    const int MEGABYTE = 1024 * KILOYBTE;
+    const R64 registerPointer = rbp;  // RBP is used as a pointer to the register array
+  
+public:
+    X86DynaRecCPU() { Init(); } 
+// interface methods
+    virtual bool isDynarec() final { return true; } // This dynarec is a dynarec, yes
+    inline bool Implemented() final { return true; }  // This is implemented in 64-bit mode
+    virtual void Execute() { execute(); }
+    virtual bool Init() { printf("Add init method to x64 JIT!\n"); return true; }
+    virtual void Reset() { printf("Add resetting to x64 JIT!\n"); }
+    virtual void Clear(uint32_t Addr, uint32_t Size) { printf("Add clearing to x64 JIT\n");  }
+    virtual void Shutdown() { printf("Add shutdown to x64 JIT\n"); }
+    virtual void SetPGXPMode(uint32_t pgxpMode) final { printf("PGXP stuff in 64-bit JIT\n"); }
+   
+// backend methods
+  private:
     // inline bool isPcValid(uint32_t addr) { return m_psxRecLUT[addr >> 16]; }
     inline bool isConst(unsigned reg) {  // for constant propagation, to check if we know a reg value at compile time
         return registers[reg].state == Constant;
     }
-    inline bool Implemented() final { return true; }  // This is implemented in 64-bit modes
 
     // for constant propagation: shows if a register is constant or not
     enum RegState { Unknown, Constant };
@@ -49,7 +63,11 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
         registers[reg].val = value;
     }
 
-    void init() {}
+    void execute() {
+        recompileBlock();
+        printf("Compiled block\n");
+        exit(1);
+    }
 
     void recompileBlock() {
         assert(gen.getBufferIndex() < REC_MEMORY_SIZE);  // check that we haven't overflowed our code buffer
@@ -65,10 +83,11 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
             m_inDelaySlot = m_nextIsDelaySlot;
             m_nextIsDelaySlot = false;
 
-            instructionPointer = (uint32_t*)PSXM(recPC);  // get pointer to instruction
-            m_psxRegs.code = *instructionPointer;         // read the instruction
+            instructionPointer = (uint32_t*) PSXM(recPC);  // get pointer to instruction
             assert(instructionPointer != NULL);           // check the pointer is not null
-            PCSX::g_system->message("Compiling instruction %08X", m_psxRegs.code);
+            m_psxRegs.code = *instructionPointer;         // read the instruction
+            printf("Compiling instruction %08X", m_psxRegs.code);
+            while (1) {};
             exit(1);
 
             recPC += 4;              // increment PC by sizeof(instruction)
@@ -76,5 +95,3 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
         }
     }
 };
-}; // end namespace
-#endif
