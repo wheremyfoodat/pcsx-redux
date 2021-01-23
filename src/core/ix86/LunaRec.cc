@@ -1,33 +1,15 @@
-/***************************************************************************
- *   Copyright (C) 2007 Ryan Schultz, PCSX-df Team, PCSX team              *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program; if not, write to the                         *
- *   Free Software Foundation, Inc.,                                       *
- *   51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.           *
- ***************************************************************************/
-
 #include "core/disr3000a.h"
 #include "core/psxemulator.h"
 #include "core/r3000a.h"
 #include "core/system.h"
+#include "core/ix86/Luna.hpp"
 
 namespace {
 const auto KILOYBTE = 1024;
 const auto MEGABYTE = 1024 * KILOYBTE;
 
 #if defined(__x86_64) || defined (_M_AMD64) // if 64-bit
-    class X86DynaRecCPU : public PCSX::R3000Acpu {
+    class X86DynaRecCPU : public PCSX::R3000Acpu ("x64 Dynarec") {
         inline bool isPcValid(uint32_t addr) { return m_psxRecLUT[addr >> 16]; }
         inline bool isConst(unsigned reg) { return m_iRegs[reg].state == Constant; } // for constant propagation, to check if we know a reg value at compile time
         constexpr bool Implemented() final { return true; } // This is implemented in 64-bit modes
@@ -47,7 +29,8 @@ const auto MEGABYTE = 1024 * KILOYBTE;
         uint8_t* recRAM; // recompiler RAM
         uint32_t recPC; // Points to the instruction we're compiling
         const int REC_MEMORY_SIZE = 16 * MEGABYTE; // how big our x64 code buffer is. This is 16MB vs the 32-bit JIT's 8MB, just to be safe, and since x64 code tends to be longer
-        
+        const int MAX_BLOCK_SIZE = 50; // Max MIPS instructions per block. This will prolly get raised.
+
         bool compiling = true; // Are we compiling code right now?
 
         // Mark registers[reg] as constant, with a value of "value"
@@ -57,7 +40,7 @@ const auto MEGABYTE = 1024 * KILOYBTE;
         }
 
         void init() {
-            
+
         }
     }
 
