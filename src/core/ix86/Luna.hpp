@@ -894,6 +894,11 @@ public:
       return buffer;
   }
 
+  /// Get the buffer index
+  u32 getBufferIndex() {
+      return bufferPtr;
+  }
+
   /// Set a user-defined buffer for the emitter
   void setBuffer (u8* buffer) {
       this->buffer = buffer;

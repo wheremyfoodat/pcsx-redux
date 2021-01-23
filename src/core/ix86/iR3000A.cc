@@ -3194,22 +3194,6 @@ void X86DynaRecCPU::SetPGXPMode(uint32_t pgxpMode) {
     // reset to ensure new func tables are used
     Reset();
 }
-
-#else
-
-class X86DynaRecCPU : public PCSX::R3000Acpu {
-  public:
-    X86DynaRecCPU() : R3000Acpu("x86 DynaRec") {}
-    virtual bool Implemented() final { return false; }
-    virtual bool Init() final { return false; }
-    virtual void Reset() final { abort(); }
-    virtual void Execute() final { abort(); }
-    virtual void Clear(uint32_t Addr, uint32_t Size) final { abort(); }
-    virtual void Shutdown() final { abort(); }
-    virtual void SetPGXPMode(uint32_t pgxpMode) final { abort(); }
-    virtual bool isDynarec() final { abort(); }
-};
-
 #endif
 
 }  // namespace
