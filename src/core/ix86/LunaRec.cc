@@ -6,18 +6,19 @@
 #include "core/ix86/Luna.hpp"
 using namespace Luna;
 
+
+#if defined(__x86_64) || defined(_M_AMD64)  // if 64-bit
 namespace {
 const auto KILOYBTE = 1024;
 const auto MEGABYTE = 1024 * KILOYBTE;
-const auto registerPointer = rbp; // RBP is used as a pointer to the register array
+const auto registerPointer = rbp;  // RBP is used as a pointer to the register array
 
-#if defined(__x86_64) || defined (_M_AMD64) // if 64-bit
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     // inline bool isPcValid(uint32_t addr) { return m_psxRecLUT[addr >> 16]; }
-    inline bool isConst(unsigned reg) { // for constant propagation, to check if we know a reg value at compile time
+    inline bool isConst(unsigned reg) {  // for constant propagation, to check if we know a reg value at compile time
         return registers[reg].state == Constant;
     }
-    constexpr bool Implemented() final { return true; }  // This is implemented in 64-bit modes
+    inline bool Implemented() final { return true; }  // This is implemented in 64-bit modes
 
     // for constant propagation: shows if a register is constant or not
     enum RegState { Unknown, Constant };
@@ -75,5 +76,5 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
         }
     }
 };
+}; // end namespace
 #endif
-} // end anonymous namespace

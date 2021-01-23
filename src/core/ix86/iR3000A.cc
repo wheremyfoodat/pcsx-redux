@@ -43,10 +43,10 @@
 #include "core/system.h"
 #include "spu/interface.h"
 
+
 namespace {
-
+    
 #if defined(__i386__) || defined(_M_IX86)
-
 class X86DynaRecCPU;
 
 typedef void (X86DynaRecCPU::*func_t)();
@@ -3194,9 +3194,25 @@ void X86DynaRecCPU::SetPGXPMode(uint32_t pgxpMode) {
     // reset to ensure new func tables are used
     Reset();
 }
-#endif
 
-}  // namespace
+#elif defined(__x86_64) || defined(_M_AMD64)
+    #include "core/ix86/LunaRec.cc"
+
+#else
+  class X86DynaRecCPU : public PCSX::R3000Acpu {
+  public:
+  X86DynaRecCPU() : R3000Acpu("x86 DynaRec") {}
+  virtual bool Implemented() final { return false; }
+  virtual bool Init() final { return false; }
+  virtual void Reset() final { abort(); }
+  virtual void Execute() final { abort(); }
+  virtual void Clear(uint32_t Addr, uint32_t Size) final { abort(); }
+  virtual void Shutdown() final { abort(); }
+  virtual void SetPGXPMode(uint32_t pgxpMode) final { abort(); }
+  virtual bool isDynarec() final { abort(); }
+};
+#endif
+} // end namespace
 
 std::unique_ptr<PCSX::R3000Acpu> PCSX::Cpus::getX86DynaRec() {
     return std::unique_ptr<PCSX::R3000Acpu>(new X86DynaRecCPU());
