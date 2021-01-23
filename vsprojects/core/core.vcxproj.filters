@@ -218,6 +218,9 @@
     <ClInclude Include="..\..\src\core\ix86\ix86.h">
       <Filter>Header Files\ix86</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\Luna.hpp">
+      <Filter>Header Files\ix86</Filter>
+    </ClInclude>
     <ClInclude Include="..\..\src\core\psxemulator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
