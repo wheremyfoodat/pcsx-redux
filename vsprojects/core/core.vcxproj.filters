@@ -24,6 +24,9 @@
     <ClCompile Include="..\..\src\core\ix86\iR3000A.cc">
       <Filter>Source Files\ix86</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\core\ix86\LunaRec.cc">
+      <Filter>Source Files\ix86</Filter>
+    </ClCompile>
     <ClCompile Include="..\..\src\core\ix86\ix86.cc">
       <Filter>Source Files\ix86</Filter>
     </ClCompile>
