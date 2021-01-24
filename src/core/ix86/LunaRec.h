@@ -88,7 +88,7 @@ public:
     bool compiling = true;  // Are we compiling code right now?
 
     const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functions for basic instructions
-        &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 00
+        &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recNULL,  // 00
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recADDI, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
@@ -254,4 +254,12 @@ public:
             assert(1 == 0); // Implement this later
         }
     }
-};
+
+    void recJ() {
+        compiling = false; // mark this as the end of the block
+        const u32 immediate = (m_psxRegs.code & 0x3FFFFFF) << 2; // fetch the immediate (26 low bits of instruction) and multiply by 4
+        const u32 newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
+
+        printf("[JIT64] End of block. Jumped to %08X\n", newPC);
+    }
+};  
