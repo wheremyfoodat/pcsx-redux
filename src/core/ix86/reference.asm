@@ -1,7 +1,7 @@
 ; x64 dynarec generated assembly + comments reference
 
-; $Imm: 16-bit immediate field
-; $Simm: Sign-extended 16-bit immediate field
+; $imm: 16-bit immediate field
+; $simm: Sign-extended 16-bit immediate field
 ; $rt: Instruction's $rt register
 ; $rd: Instruction's $rd register
 ; = (const): Set a register to a value and mark as const
@@ -15,3 +15,13 @@ ORI:
     else
         mov $rt, $rs ; move the register that rs has been allocated to the register rt has been allocated
         or $rt, imm ; or with immediate
+
+; TODO: Optimize like the 32-bit JIT but less horribly
+SW:
+    mov rax, &memWrite32Wrapper ; function pointer to write function in rax
+    if const ($rs) ; address is constant
+        mov rcx, ($rs + imm) ; move address to 1st param reg
+    if const ($rt) ; stored value is constant
+        mov rdx, ($rt) ; move value to second param reg
+        
+    call rax ; execute the function

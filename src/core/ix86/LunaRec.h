@@ -1,5 +1,4 @@
 #pragma once
-#include <fmt/core.h>
 #include "core/debug.h"
 #include "core/disr3000a.h"
 #include "core/gpu.h"
@@ -10,6 +9,12 @@
 #include "Luna.hpp"
 using namespace Luna;
 
+#define BAILZERO if (!_Rd_) return; // Macro that skips compilation if Rd == 0
+
+// Wrapper functions (these need to be global)
+    /// Write a 32-bit value to memory[mem]
+    void psxMemWrite32Wrapper(uint32_t mem, uint32_t value) { PCSX::g_emulator->m_psxMem->psxMemWrite32(mem, value); }
+
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024;
     const int MEGABYTE = 1024 * KILOYBTE;
@@ -19,10 +24,14 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
     const R64 registerPointer = rbp;  // RBP is used as a pointer to the register array
     const std::array <R64, 7> allocateableRegisters = { r8, r9, r10, r11, rdx, rax, rcx }; // the registers our JIT can allocate. r8-r11 come first, as
                                                                                            // those don't have any conventional uses in x64 
+    const R32 arg1 = ecx;
+    const R32 arg2 = edx;
+    const R32 arg3 = r8d;
+    const R32 arg4 = r9d;
 #else
 #error "x64 JIT not supported outside of Windows"
 #endif
-    unsigned int allocatedRegisters = 0; // how many registers have been allocated in this regs?
+    unsigned int allocatedRegisters = 0; // how many registers have been allocated in this block?
 
 public:
     X86DynaRecCPU() { Init(); } 
@@ -41,10 +50,8 @@ public:
     inline bool isConst(unsigned reg) {  // for constant propagation, to check if we know a reg value at compile time
         return registers[reg].state == Constant;
     }
-
     
-    virtual bool Init() { 
-        printf("Add init method to x64 JIT!\n"); 
+    virtual bool Init() {
         gen = Generator(REC_MEMORY_SIZE); // This initializes the emitter and emitter memory
         blocks = gen.data();
         return true; 
@@ -55,8 +62,8 @@ public:
 
     // A struct that holds a register's info
     struct Register {
-        uint32_t val;    // the register's cached value
-        RegState state;  // is this const or not?
+        uint32_t val = 0;    // the register's cached value (TODO: Add initial GP/FP)
+        RegState state = Constant;  // is this const or not? (Assume constant, set to 0, on boot)
         R32 allocatedReg; // Which host reg has this guest reg been allocated to? The JIT performs register allocation, that means the MIPS reg $t0 might be cached in our x86 "edx" reg, and so on
         bool allocated = false; // Has this register been allocated to a host reg?
     };
@@ -80,10 +87,10 @@ public:
 
     bool compiling = true;  // Are we compiling code right now?
 
-    const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functionss
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 00
+    const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functions for basic instructions
+        &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 00
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
+        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recADDI, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 14
@@ -91,12 +98,31 @@ public:
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 20
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 28
+        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 2c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 30
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 34
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 38
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 3c
+    };
+
+    const FunctionPointer recSpecial [64] = { // Function pointer table to the compilation functions for special instructions
+        &X86DynaRecCPU::recSLL, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 00
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 04
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 08
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 0c
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 10
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 14
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 28
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 34
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 38
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 3c
     };
 
     /// Mark registers[reg] as constant, with a value of "value"
@@ -108,10 +134,12 @@ public:
     /// Allocate a MIPS register to an x64 register
     void allocateRegister (unsigned regNumber) {
         if (registers[regNumber].allocated) return; // if the register has been allocated, exit
-        //printf (fmt::format("Allocated {} to {}", guestRegNames[allocatedRegisters], allocateableRegNames[allocatedRegisters]).c_str());
+        printf ("Allocated %s to %s", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 
         registers[regNumber].allocated = true; // mark reg as allocated
         registers[regNumber].allocatedReg = (R32) allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
+        // gen.mov (registers[regNumber].allocatedRegs, dword [registerPointer + regNumber * 4]); // load the cached reg to the host reg
+        printf ("TODO: 32-bit addressing\n");
         assert (allocatedRegisters <= 8); // assert that we didn't overallocate
     }
 
@@ -119,7 +147,7 @@ public:
     void execute() {
         recompileBlock(); // compile a block
         printf("Compiled block\n"); // now
-        exit(1);
+        exit(1); // crash because unimplemented
     }
 
     /// Compile a MIPS block
@@ -147,27 +175,83 @@ public:
         }
     }
 
+    /// Compile the "special" (opcode == 0) instructions
+    void recompileSpecial() {
+        (*this.*recSpecial[m_psxRegs.code & 0x3F])();   // Call the function to compile the instruction (The >> 26 is to fetch the subfunction)
+    }
+
     /// Compile a reserved or unimplemented instruction
     void recNULL() {
         printf("Compiling unknown instruction %08X\n", m_psxRegs.code);
         printf("Opcode: %02X\n", m_psxRegs.code >> 26);
+        printf("PC: %08X\n", recPC);
+        exit(1);
+    }
+
+    /// Compile a reserved or unimplemented special instruction
+    void recNULLSpecial() { 
+        printf("Compiling unknown special instruction %08X\n", m_psxRegs.code);
+        printf("Subfunction: %02X\n", m_psxRegs.code & 0x3F);
+        printf("PC: %08X\n", recPC);
         exit(1);
     }
     
     void recLUI() {
-        auto value = _Imm_ << 16; // fetch immediate, shift to the left by 16
+        auto value = _ImmU_ << 16; // fetch immediate, shift to the left by 16
         markConst (_Rt_, value); // Note: LUI *always* produces a constant result
     }
 
     void recORI() {
-        if (isConst(_Rs_))
-            markConst (_Rt_, registers[_Rs_].val | _Imm_);
+        BAILZERO // don't compile if rd == 0
+
+        if (isConst(_Rs_)) // if Rs is const, mark Rt as const too
+            markConst (_Rt_, registers[_Rs_].val | _ImmU_);
         else {
             allocateRegister (_Rs_);
             allocateRegister (_Rt_);
             registers[_Rt_].state = Unknown; // mark Rt as unknown
             gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov rt, rs
-            gen.OR (registers[_Rt_].allocatedReg, (u32) _Imm_); // or $rt, imm
+            gen.OR (registers[_Rt_].allocatedReg, (u32) _ImmU_); // or $rt, imm
+        }
+    }
+
+    // TODO: Optimize
+    void recSW() { 
+        assert (4 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        gen.mov (rax, (u64) &psxMemWrite32Wrapper); // function pointer in rax
+
+        if (isConst(_Rs_))
+            gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+        else {
+            allocateRegister(_Rs_);
+            gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
+            gen.add (arg1, _Imm_); // arg1 += imm
+        }
+
+        if (isConst(_Rt_))
+            gen.mov (arg2, registers[_Rt_].val); // value in arg2
+        else {
+            allocateRegister(_Rt_);
+            gen.mov (arg2, registers[_Rt_].allocatedReg);
+        }
+
+        gen.call (rax); // call wrapper
+    }
+
+    void recSLL() {
+        BAILZERO // Don't compile if NOP
+        assert(1 == 0); // Implement this later
+    }
+
+    void recADDI() { 
+        BAILZERO // Don't compile if NOP
+        if (isConst(_Rs_)) // If Rs is constant, mark Rt as constant too
+            markConst(_Rt_, registers[_Rs_].val + _Imm_);
+
+        else {
+            printf("ADDI %s, %s, %08X", guestRegNames[_Rt_].c_str(), guestRegNames[_Rs_].c_str(), _Imm_);
+            registers[_Rt_].state = Unknown;
+            assert(1 == 0); // Implement this later
         }
     }
 };
