@@ -809,7 +809,8 @@ void InterpretedCPU::psxCFC2() {
 }
 
 /*********************************************************
- * Unknown instruction (would generate an exception)     *
+ * Unknow instruction (would generate an exception)       *
+ * Format:  ?                                             *
  *********************************************************/
 void InterpretedCPU::psxNULL() { PSXCPU_LOG("psx: Unimplemented op %x\n", PCSX::g_emulator->m_psxCpu->m_psxRegs.code); }
 

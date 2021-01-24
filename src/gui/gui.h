@@ -109,7 +109,7 @@ class GUI final {
     void endFrame();
 
     bool configure();
-    void showThemes(bool& changed);  // Theme window : Allows for custom imgui themes
+    void showThemes();  // Theme window : Allows for custom imgui themes
     void about();
     void interruptsScaler();
 
@@ -153,9 +153,8 @@ class GUI final {
     typedef Setting<int, TYPESTRING("WindowSizeX"), 1280> WindowSizeX;
     typedef Setting<int, TYPESTRING("WindowSizeY"), 800> WindowSizeY;
     typedef Setting<int, TYPESTRING("IdleSwapInterval"), 1> IdleSwapInterval;
-    typedef Setting<int, TYPESTRING("GUITheme"), 0> GUITheme;
     Settings<Fullscreen, FullscreenRender, ShowMenu, ShowLog, WindowPosX, WindowPosY, WindowSizeX, WindowSizeY,
-             IdleSwapInterval, GUITheme>
+             IdleSwapInterval>
         settings;
     bool &m_fullscreenRender = {settings.get<FullscreenRender>().value};
     bool &m_showMenu = {settings.get<ShowMenu>().value};
