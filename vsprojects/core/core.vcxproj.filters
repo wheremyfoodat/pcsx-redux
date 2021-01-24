@@ -129,9 +129,6 @@
     <ClCompile Include="..\..\src\core\web-server.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\core\ix86\.h">
-      <Filter>Source Files\ix86</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\core\cdriso.h">
