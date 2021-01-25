@@ -30,6 +30,7 @@
 #endif
 #endif
 
+#include <fstream> // for dumping JIT code
 #include "core/debug.h"
 #include "core/disr3000a.h"
 #include "core/gpu.h"

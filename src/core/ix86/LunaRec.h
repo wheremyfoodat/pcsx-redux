@@ -11,7 +11,10 @@ using namespace Luna;
 
 // Wrapper functions (these need to be global)
     /// Write a 32-bit value to memory[mem]
-    void psxMemWrite32Wrapper(uint32_t mem, uint32_t value) { PCSX::g_emulator->m_psxMem->psxMemWrite32(mem, value); }
+void psxMemWrite32Wrapper(uint32_t address, uint32_t value) { 
+    printf("Wrote %08X to %08X\n", value, address);
+    PCSX::g_emulator->m_psxMem->psxMemWrite32(address, value); 
+}
 
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
@@ -188,6 +191,7 @@ public:
         auto emittedCode = (JITCallback) blockPointer; // function pointer to the start of the block
         printf ("Buffer pointer: %p\nJumping to buffer address: %p\n", blocks, blockPointer);
         (*emittedCode)(); // call emitted code
+        printf("Survived executing a block\n");
         exit(1); // crash because unimplemented
     }
 
@@ -221,6 +225,7 @@ public:
         }
 
         gen.ret(); // emit a RET to return from the JIT 
+        dumpBuffer();
     }
 
     /// Compile the "special" (opcode == 0) instructions
@@ -311,5 +316,12 @@ public:
         const u32 newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
 
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
+    }
+
+    void dumpBuffer() {
+        auto index = gen.getBufferIndex();
+        std::ofstream file ("output.bin", std::ios::binary);
+        file.write ((const char*) blocks, index);
+        printf ("Dumped %d bytes\n", index);
     }
 };  
