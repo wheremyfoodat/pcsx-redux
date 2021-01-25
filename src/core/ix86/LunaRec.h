@@ -9,25 +9,23 @@
 #include "Luna.hpp"
 using namespace Luna;
 
-#define BAILZERO if (!_Rd_) return; // Macro that skips compilation if Rd == 0
-
 // Wrapper functions (these need to be global)
     /// Write a 32-bit value to memory[mem]
     void psxMemWrite32Wrapper(uint32_t mem, uint32_t value) { PCSX::g_emulator->m_psxMem->psxMemWrite32(mem, value); }
 
 class X86DynaRecCPU : public PCSX::R3000Acpu {
-    const int KILOYBTE = 1024;
-    const int MEGABYTE = 1024 * KILOYBTE;
-    typedef void (X86DynaRecCPU::*FunctionPointer)();
+    const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
+    const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
+    typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
     const R64 registerPointer = rbp;  // RBP is used as a pointer to the register array
     const std::array <R64, 7> allocateableRegisters = { r8, r9, r10, r11, rdx, rax, rcx }; // the registers our JIT can allocate. r8-r11 come first, as
                                                                                            // those don't have any conventional uses in x64 
-    const R32 arg1 = ecx;
-    const R32 arg2 = edx;
-    const R32 arg3 = r8d;
-    const R32 arg4 = r9d;
+    const R32 arg1 = ecx; // register where first arg is stored
+    const R32 arg2 = edx; // register where second arg is stored
+    const R32 arg3 = r8d; // register where third arg is stored
+    const R32 arg4 = r9d; // register where fourth arg is stored
 #else
 #error "x64 JIT not supported outside of Windows"
 #endif
@@ -46,7 +44,8 @@ public:
    
 // backend methods
   private:
-    // inline bool isPcValid(uint32_t addr) { return m_psxRecLUT[addr >> 16]; }
+    inline bool isPcValid(uint32_t addr) { return validBlockLUT[addr >> 16] != nullptr; } // Check if the block is at a valid memory address by peeking at the top 16 bits
+                                                                                          // This will return true if in WRAM, or BIOS
     inline bool isConst(unsigned reg) {  // for constant propagation, to check if we know a reg value at compile time
         return registers[reg].state == Constant;
     }
@@ -54,6 +53,22 @@ public:
     virtual bool Init() {
         gen = Generator(REC_MEMORY_SIZE); // This initializes the emitter and emitter memory
         blocks = gen.data();
+
+        validBlockLUT = calloc (0x10000, sizeof(uintptr_t*));
+        for (auto i = 0; i < 0x80; i++) { // map WRAM to the LUT
+            auto ptr = (uintptr_t) &m_recRAM[(i & 0x1f) << 16];
+            validBlockLUT[i] = ptr; // KUSEG
+            validBlockLUT[i + 0x8000] = ptr; // KSEG0
+            validBlockLUT[i + 0xA000] = ptr; // KSEG1
+        }
+
+        for (i = 0; i < 0x08; i++) { // map BIOS
+            auto ptr = (uintptr_t) &m_recROM[i << 16];
+            validBlockLUT[i + 0x1FC0] = ptr; // KUSEG
+            validBlockLUT[i + 0x9FC0] = ptr; // KSEG0
+            validBlockLUT[i + 0xBFC0] = ptr; // KSEG1
+        }
+        
         return true; 
     }
 
@@ -76,13 +91,14 @@ public:
                                                         "$t5", "$t6", "$t7", "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7", "$t8", "$t9", "$k0"
                                                         "$k1", "$gp", "$sp", "$fp", "$ra" };
 
+    uintptr_t* validBlockLUT; // shows which blocks are valid
     uint8_t* blocks;  // contains the compiled x64 code
-    uint8_t* recROM;  // recompiler ROM
-    uint8_t* recRAM;  // recompiler RAM
+    uint8_t* recROM;  // pointers to the compiled x64 BIOS code
+    uint8_t* recRAM;  // pointers to the compiled x64 WRAM code
 
     uint32_t recPC;                             // Points to the instruction we're compiling
-    const int REC_MEMORY_SIZE = 16 * MEGABYTE;  // how big our x64 code buffer is. This is 16MB vs the 32-bit JIT's 8MB,
-                                                // just to be safe, and since x64 code tends to be longer
+    const int REC_MEMORY_SIZE = 32 * MEGABYTE;  // how big our x64 code buffer is. This is 132B vs the 32-bit JIT's 8MB,
+                                                // just to be safe, and since x64 code tends to be longer + 8MB is tiny
     const int MAX_BLOCK_SIZE = 50;              // Max MIPS instructions per block. This will prolly get raised.
 
     bool compiling = true;  // Are we compiling code right now?
@@ -197,12 +213,14 @@ public:
     }
     
     void recLUI() {
+        if (!_Rt_) return; // don't compile if NOP
+
         auto value = _ImmU_ << 16; // fetch immediate, shift to the left by 16
         markConst (_Rt_, value); // Note: LUI *always* produces a constant result
     }
 
     void recORI() {
-        BAILZERO // don't compile if rd == 0
+        if (!_Rt_) return; // don't compile if NOP
 
         if (isConst(_Rs_)) // if Rs is const, mark Rt as const too
             markConst (_Rt_, registers[_Rs_].val | _ImmU_);
@@ -239,12 +257,12 @@ public:
     }
 
     void recSLL() {
-        BAILZERO // Don't compile if NOP
+        if (!_Rd_) return; // don't compile if NOP
         assert(1 == 0); // Implement this later
     }
 
     void recADDI() { 
-        BAILZERO // Don't compile if NOP
+        if (!_Rt_) return; // don't compile if NOP
         if (isConst(_Rs_)) // If Rs is constant, mark Rt as constant too
             markConst(_Rt_, registers[_Rs_].val + _Imm_);
 
