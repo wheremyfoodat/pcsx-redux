@@ -44,26 +44,29 @@ public:
    
 // backend methods
   private:
-    inline bool isPcValid(uint32_t addr) { return validBlockLUT[addr >> 16] != nullptr; } // Check if the block is at a valid memory address by peeking at the top 16 bits
+    inline bool isPcValid(uint32_t addr) { return validBlockLUT[addr >> 16]; } // Check if the block is at a valid memory address by peeking at the top 16 bits
                                                                                           // This will return true if in WRAM, or BIOS
     inline bool isConst(unsigned reg) {  // for constant propagation, to check if we know a reg value at compile time
         return registers[reg].state == Constant;
     }
     
     virtual bool Init() {
+        printf("Initializing x64 JIT...\n");
         gen = Generator(REC_MEMORY_SIZE); // This initializes the emitter and emitter memory
-        blocks = gen.data();
+        recRAM = (uint8_t*) calloc(0x200000, 1); // initialize recompiler RAM
+        recROM = (uint8_t*) calloc(0x080000, 1); // initialize recompiler ROM
+        blocks = gen.data(); // Our code buffer
 
-        validBlockLUT = calloc (0x10000, sizeof(uintptr_t*));
+        validBlockLUT = (uintptr_t*) calloc (0x10000, sizeof(uintptr_t*));
         for (auto i = 0; i < 0x80; i++) { // map WRAM to the LUT
-            auto ptr = (uintptr_t) &m_recRAM[(i & 0x1f) << 16];
+            auto ptr = (uintptr_t) &recRAM[(i & 0x1f) << 16];
             validBlockLUT[i] = ptr; // KUSEG
             validBlockLUT[i + 0x8000] = ptr; // KSEG0
             validBlockLUT[i + 0xA000] = ptr; // KSEG1
         }
 
-        for (i = 0; i < 0x08; i++) { // map BIOS
-            auto ptr = (uintptr_t) &m_recROM[i << 16];
+        for (auto i = 0; i < 0x08; i++) { // map BIOS
+            auto ptr = (uintptr_t) &recROM[i << 16];
             validBlockLUT[i + 0x1FC0] = ptr; // KUSEG
             validBlockLUT[i + 0x9FC0] = ptr; // KSEG0
             validBlockLUT[i + 0xBFC0] = ptr; // KSEG1
@@ -142,7 +145,7 @@ public:
     };
 
     /// Mark registers[reg] as constant, with a value of "value"
-    void markConst(int reg, uint32_t value) {
+    inline void markConst(int reg, uint32_t value) {
         registers[reg].state = Constant;
         registers[reg].val = value;
     }
@@ -159,10 +162,26 @@ public:
         assert (allocatedRegisters <= 8); // assert that we didn't overallocate
     }
 
+    /// Params: A program counter value
+    /// Returns: A pointer to the host x64 code that points to the block that starts from the given PC
+    inline uintptr_t* getBlockPointer (uint32_t pc) {
+        uintptr_t base = validBlockLUT[pc >> 16];
+        uintptr_t offset = pc & 0xFFFF;
+        uintptr_t* pointer = (uintptr_t*) (base + offset);
+
+        return (uintptr_t*) (*pointer);
+    }
+
     /// Run the JIT
     void execute() {
-        recompileBlock(); // compile a block
-        printf("Compiled block\n"); // now
+        auto blockPointer = getBlockPointer(m_psxRegs.pc); // get a pointer to the current x64 block
+        if (blockPointer == nullptr) { // if the block hasn't been compiled
+            recompileBlock(); // compile a block
+            printf("Compiled block\n"); // now
+        }
+        
+        else
+            printf ("Already compiled this block\n");
         exit(1); // crash because unimplemented
     }
 
@@ -189,6 +208,8 @@ public:
             recPC += 4;              // increment PC by sizeof(instruction)
             compiledInstructions++;  // increment the compiled instructions counter
         }
+
+        gen.ret(); // emit a RET to return from the JIT 
     }
 
     /// Compile the "special" (opcode == 0) instructions
