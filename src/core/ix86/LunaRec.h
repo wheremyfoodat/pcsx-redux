@@ -17,9 +17,10 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
     const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
     typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
+    typedef void (*JITCallback)(); // A function pointer to JIT-emitted code
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-    const R64 registerPointer = rbp;  // RBP is used as a pointer to the register array
+    const R64 registerPointer = rsi;  // RSI will be used as a pointer to the register array
     const std::array <R64, 7> allocateableRegisters = { r8, r9, r10, r11, rdx, rax, rcx }; // the registers our JIT can allocate. r8-r11 come first, as
                                                                                            // those don't have any conventional uses in x64 
     const R32 arg1 = ecx; // register where first arg is stored
@@ -53,8 +54,8 @@ public:
     virtual bool Init() {
         printf("Initializing x64 JIT...\n");
         gen = Generator(REC_MEMORY_SIZE); // This initializes the emitter and emitter memory
-        recRAM = (uint8_t*) calloc(0x200000, 1); // initialize recompiler RAM
-        recROM = (uint8_t*) calloc(0x080000, 1); // initialize recompiler ROM
+        recRAM = (uintptr_t*) calloc(0x200000, sizeof(uintptr_t*)); // initialize recompiler RAM
+        recROM = (uintptr_t*) calloc(0x080000, sizeof(uintptr_t*)); // initialize recompiler ROM
         blocks = gen.data(); // Our code buffer
 
         validBlockLUT = (uintptr_t*) calloc (0x10000, sizeof(uintptr_t*));
@@ -96,8 +97,8 @@ public:
 
     uintptr_t* validBlockLUT; // shows which blocks are valid
     uint8_t* blocks;  // contains the compiled x64 code
-    uint8_t* recROM;  // pointers to the compiled x64 BIOS code
-    uint8_t* recRAM;  // pointers to the compiled x64 WRAM code
+    uintptr_t* recROM;  // pointers to the compiled x64 BIOS code
+    uintptr_t* recRAM;  // pointers to the compiled x64 WRAM code
 
     uint32_t recPC;                             // Points to the instruction we're compiling
     const int REC_MEMORY_SIZE = 32 * MEGABYTE;  // how big our x64 code buffer is. This is 132B vs the 32-bit JIT's 8MB,
@@ -169,31 +170,41 @@ public:
         uintptr_t offset = pc & 0xFFFF;
         uintptr_t* pointer = (uintptr_t*) (base + offset);
 
-        return (uintptr_t*) (*pointer);
+        return (uintptr_t*) *pointer;
     }
 
     /// Run the JIT
     void execute() {
-        auto blockPointer = getBlockPointer(m_psxRegs.pc); // get a pointer to the current x64 block
+        auto blockPointer = getBlockPointer(m_psxRegs.pc); // pointer to the current x64 block
         if (blockPointer == nullptr) { // if the block hasn't been compiled
-            recompileBlock(); // compile a block
+            printf("Compiling block\n");
+            recompileBlock(blockPointer); // compile a block, set block pointer to the address of the block
             printf("Compiled block\n"); // now
         }
         
         else
             printf ("Already compiled this block\n");
+        
+        auto emittedCode = (JITCallback) blockPointer; // function pointer to the start of the block
+        printf ("Buffer pointer: %p\nJumping to buffer address: %p\n", blocks, blockPointer);
+        (*emittedCode)(); // call emitted code
         exit(1); // crash because unimplemented
     }
 
     /// Compile a MIPS block
-    void recompileBlock() {
+    /// Params: blockPointer -> The address to store the start of the current block
+    void recompileBlock (uintptr_t*& blockPointer) {
         assert(gen.getBufferIndex() < REC_MEMORY_SIZE);  // check that we haven't overflowed our code buffer
         printf("Align me!\n");                           // TODO: Alignment
         uint32_t* instructionPointer;                    // pointer to the instruction to compile
 
         recPC = m_psxRegs.pc;    // the PC of the recompiler
         uint32_t oldPC = recPC;  // the PC at the start of the block
-        uint32_t startingBufferIndex = gen.getBufferIndex();
+            
+        uintptr_t bufferIndex = gen.getBufferIndex(); // the emitter's current index
+        uintptr_t blockStart = (uintptr_t) blocks + bufferIndex; // the address the current block starts from in the emitter buffer
+        blockPointer = (uintptr_t*) blockStart; // Add the block to the block cache
+
         auto compiledInstructions = 0;  // how many instructions we've compiled in this block
 
         while (compiling) {

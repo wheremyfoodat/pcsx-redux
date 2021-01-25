@@ -21,7 +21,17 @@ SW:
     mov rax, &memWrite32Wrapper ; function pointer to write function in rax
     if const ($rs) ; address is constant
         mov rcx, ($rs + imm) ; move address to 1st param reg
+    else
+        mov rcx, $rs
+        add rcx, imm
+    
     if const ($rt) ; stored value is constant
         mov rdx, ($rt) ; move value to second param reg
+    else
+        mov rdx, $rt
         
     call rax ; execute the function
+
+JR: 
+    mov [registerPointer + pcIndex], newPC ; 
+    
