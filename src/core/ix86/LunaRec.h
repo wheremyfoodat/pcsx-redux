@@ -6,37 +6,37 @@
 #include "core/psxemulator.h"
 #include "core/r3000a.h"
 #include "core/system.h"
+#include "Luna.hpp"
+using namespace Luna;
 
 // Wrapper functions (these need to be global)
     /// Write a 32-bit value to memory[mem]
-void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_psxMem->psxMemWrite32(address, value);
+void psxMemWrite32Wrapper(uint32_t address, uint32_t value) { 
     printf("Wrote %08X to %08X\n", value, address);
+    PCSX::g_emulator->m_psxMem->psxMemWrite32(address, value); 
 }
 
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
     const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
-    const uint32_t PC_OFFSET = 128 * 4; // the offset of the PC in the registers struct
-
     typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
     typedef void (*JITCallback)(); // A function pointer to JIT-emitted code
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-    const Reg64 registerPointer = rsi;  // RSI will be used as a pointer to the register array
-    const std::array <Reg32, 7> allocateableRegisters = { r8d, r9d, r10d, r11d, edx, eax, ecx }; // the registers our JIT can allocate. r8-r11 come first, as
+    const R64 registerPointer = rsi;  // RSI will be used as a pointer to the register array
+    const std::array <R64, 7> allocateableRegisters = { r8, r9, r10, r11, rdx, rax, rcx }; // the registers our JIT can allocate. r8-r11 come first, as
                                                                                            // those don't have any conventional uses in x64 
-    const Reg32 arg1 = ecx; // register where first arg is stored
-    const Reg32 arg2 = edx; // register where second arg is stored
-    const Reg32 arg3 = r8d; // register where third arg is stored
-    const Reg32 arg4 = r9d; // register where fourth arg is stored
+    const R32 arg1 = ecx; // register where first arg is stored
+    const R32 arg2 = edx; // register where second arg is stored
+    const R32 arg3 = r8d; // register where third arg is stored
+    const R32 arg4 = r9d; // register where fourth arg is stored
 #else
 #error "x64 JIT not supported outside of Windows"
 #endif
     unsigned int allocatedRegisters = 0; // how many registers have been allocated in this block?
 
 public:
-    X86DynaRecCPU() : gen (REC_MEMORY_SIZE) { Init(); } // initialize JIT and emitter
+    X86DynaRecCPU() { Init(); } 
 // interface methods
     virtual bool isDynarec() final { return true; } // This dynarec is a dynarec, yes
     inline bool Implemented() final { return true; }  // This is implemented in 64-bit mode
@@ -56,9 +56,10 @@ public:
     
     virtual bool Init() {
         printf("Initializing x64 JIT...\n");
+        gen = Generator(REC_MEMORY_SIZE); // This initializes the emitter and emitter memory
         recRAM = (uintptr_t*) calloc(0x200000, sizeof(uintptr_t*)); // initialize recompiler RAM
         recROM = (uintptr_t*) calloc(0x080000, sizeof(uintptr_t*)); // initialize recompiler ROM
-        blocks = gen.getCode(); // Our code buffer
+        blocks = gen.data(); // Our code buffer
 
         validBlockLUT = (uintptr_t*) calloc (0x10000, sizeof(uintptr_t*));
         for (auto i = 0; i < 0x80; i++) { // map WRAM to the LUT
@@ -85,11 +86,12 @@ public:
     struct Register {
         uint32_t val = 0;    // the register's cached value (TODO: Add initial GP/FP)
         RegState state = Constant;  // is this const or not? (Assume constant, set to 0, on boot)
-        Reg32 allocatedReg; // Which host reg has this guest reg been allocated to? The JIT performs register allocation, that means the MIPS reg $t0 might be cached in our x86 "edx" reg, and so on
+        R32 allocatedReg; // Which host reg has this guest reg been allocated to? The JIT performs register allocation, that means the MIPS reg $t0 might be cached in our x86 "edx" reg, and so on
         bool allocated = false; // Has this register been allocated to a host reg?
     };
 
     Register registers[32];  // the 32 guest registers
+    Generator gen;           // x64 emitter
 
     const std::array <std::string, 7> allocateableRegNames = { "r8", "r9", "r10", "r11", "rdx", "rax", "rcx" }; // x64 register strings for debugging
     const std::array <std::string, 32> guestRegNames = {"$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4"
@@ -97,7 +99,7 @@ public:
                                                         "$k1", "$gp", "$sp", "$fp", "$ra" };
 
     uintptr_t* validBlockLUT; // shows which blocks are valid
-    const uint8_t* blocks;  // contains the compiled x64 code
+    uint8_t* blocks;  // contains the compiled x64 code
     uintptr_t* recROM;  // pointers to the compiled x64 BIOS code
     uintptr_t* recRAM;  // pointers to the compiled x64 WRAM code
 
@@ -105,7 +107,6 @@ public:
     const int REC_MEMORY_SIZE = 32 * MEGABYTE;  // how big our x64 code buffer is. This is 132B vs the 32-bit JIT's 8MB,
                                                 // just to be safe, and since x64 code tends to be longer + 8MB is tiny
     const int MAX_BLOCK_SIZE = 50;              // Max MIPS instructions per block. This will prolly get raised.
-    CodeGenerator gen; // x64 emitter
 
     bool compiling = true;  // Are we compiling code right now?
 
@@ -159,7 +160,7 @@ public:
         printf ("Allocated %s to %s", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 
         registers[regNumber].allocated = true; // mark reg as allocated
-        registers[regNumber].allocatedReg = allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
+        registers[regNumber].allocatedReg = (R32) allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
         // gen.mov (registers[regNumber].allocatedRegs, dword [registerPointer + regNumber * 4]); // load the cached reg to the host reg
         printf ("TODO: 32-bit addressing\n");
         assert (allocatedRegisters <= 8); // assert that we didn't overallocate
@@ -175,17 +176,11 @@ public:
         return (uintptr_t*) *pointer;
     }
 
-    /// get the size of all the current compiled instructions
-    uintptr_t getBufferIndex() { 
-        return (uintptr_t) gen.getCurr() - (uintptr_t) blocks;
-    }
-
     /// Run the JIT
     void execute() {
         auto blockPointer = getBlockPointer(m_psxRegs.pc); // pointer to the current x64 block
         if (blockPointer == nullptr) { // if the block hasn't been compiled
             printf("Compiling block\n");
-            printf("PC: %08X", m_psxRegs.pc);
             recompileBlock(blockPointer); // compile a block, set block pointer to the address of the block
             printf("Compiled block\n"); // now
         }
@@ -194,32 +189,29 @@ public:
             printf ("Already compiled this block\n");
         
         auto emittedCode = (JITCallback) blockPointer; // function pointer to the start of the block
+        printf ("Buffer pointer: %p\nJumping to buffer address: %p\n", blocks, blockPointer);
         (*emittedCode)(); // call emitted code
-        printf("$at: %08X\n", m_psxRegs.GPR.r[1]);
-        printf("Execution will start from %08X in the next block", m_psxRegs.pc);
         printf("Survived executing a block\n");
-        exit(1);
+        exit(1); // crash because unimplemented
     }
 
     /// Compile a MIPS block
     /// Params: blockPointer -> The address to store the start of the current block
     void recompileBlock (uintptr_t*& blockPointer) {
-        assert(getBufferIndex() < REC_MEMORY_SIZE);  // check that we haven't overflowed our code buffer
+        assert(gen.getBufferIndex() < REC_MEMORY_SIZE);  // check that we haven't overflowed our code buffer
         printf("Align me!\n");                           // TODO: Alignment
         uint32_t* instructionPointer;                    // pointer to the instruction to compile
 
         recPC = m_psxRegs.pc;    // the PC of the recompiler
         uint32_t oldPC = recPC;  // the PC at the start of the block
             
-        uintptr_t blockStart = (uintptr_t) gen.getCurr(); // the address the current block starts from
+        uintptr_t bufferIndex = gen.getBufferIndex(); // the emitter's current index
+        uintptr_t blockStart = (uintptr_t) blocks + bufferIndex; // the address the current block starts from in the emitter buffer
         blockPointer = (uintptr_t*) blockStart; // Add the block to the block cache
-     
-        gen.push(rbp); // rbp is used as a pointer to the register struct, so we need to back it up
-        gen.mov(rbp, (uint64_t) &m_psxRegs); // store the pointer in rbp
-        gen.sub(rsp, 100); // fix up stack frame so that the return address is not overwritten
+
         auto compiledInstructions = 0;  // how many instructions we've compiled in this block
 
-        while (shouldContinueCompiling()) {
+        while (compiling) {
             m_inDelaySlot = m_nextIsDelaySlot; // handle delay slot jazz
             m_nextIsDelaySlot = false;
 
@@ -232,30 +224,8 @@ public:
             compiledInstructions++;  // increment the compiled instructions counter
         }
 
-        gen.add(rsp, 100); // undo the sub
-        flushRegs(); // flush the cached registers
-        gen.pop(rbp); // restore rbp
         gen.ret(); // emit a RET to return from the JIT 
-    }
-
-    /// Check whether to continue compiling or not
-    bool shouldContinueCompiling() { 
-        return m_nextIsDelaySlot || compiling;
-    }
-
-    /// Set regs to non-constant, unallocate host regs.
-    void flushRegs() { 
-        for (auto i = 1; i < 32; i++) 
-            flushReg(i); // flush every reg except from $zero since that doesn't need flushing
-    }
-
-    void flushReg(int reg) { 
-        if (isConst(reg)) {
-            gen.mov(dword [rbp + (reg * 4)], registers[reg].val); // back up const regs to memory
-            registers[reg].state = Unknown; // mark as non-const
-        }
-
-        registers[reg].allocated = false; // unallocate allocated x64 reg
+        dumpBuffer();
     }
 
     /// Compile the "special" (opcode == 0) instructions
@@ -296,14 +266,14 @@ public:
             allocateRegister (_Rt_);
             registers[_Rt_].state = Unknown; // mark Rt as unknown
             gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov rt, rs
-            gen.or_ (registers[_Rt_].allocatedReg, _ImmU_); // or $rt, imm
+            gen.OR (registers[_Rt_].allocatedReg, (u32) _ImmU_); // or $rt, imm
         }
     }
 
     // TODO: Optimize
     void recSW() { 
         assert (4 > allocatedRegisters); // assert that we're not trampling any allocated regs
-        gen.mov (rax, (uint64_t) &psxMemWrite32Wrapper); // function pointer in rax
+        gen.mov (rax, (u64) &psxMemWrite32Wrapper); // function pointer in rax
 
         if (isConst(_Rs_))
             gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
@@ -342,16 +312,14 @@ public:
 
     void recJ() {
         compiling = false; // mark this as the end of the block
-        m_nextIsDelaySlot = true;
+        const u32 immediate = (m_psxRegs.code & 0x3FFFFFF) << 2; // fetch the immediate (26 low bits of instruction) and multiply by 4
+        const u32 newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
 
-        const uint32_t immediate = (m_psxRegs.code & 0x3FFFFFF) << 2; // fetch the immediate (26 low bits of instruction) and multiply by 4
-        const uint32_t newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
-        gen.mov(dword[rbp + PC_OFFSET], newPC); // set PC to new PC
-        printf("[JIT64] End of block. Jumped to %08X\n", m_psxRegs.pc);
+        printf("[JIT64] End of block. Jumped to %08X\n", newPC);
     }
 
     void dumpBuffer() {
-        auto index = getBufferIndex();
+        auto index = gen.getBufferIndex();
         std::ofstream file ("output.bin", std::ios::binary);
         file.write ((const char*) blocks, index);
         printf ("Dumped %d bytes\n", index);
