@@ -188,7 +188,7 @@ public:
         uintptr_t offset = pc & 0xFFFF;
         uintptr_t* pointer = (uintptr_t*) (base + offset * sizeof(uintptr_t));
 
-        return (uintptr_t*) *pointer;
+        return pointer;
     }
 
     /// get the size of all the current compiled instructions
@@ -199,7 +199,7 @@ public:
     /// Run the JIT
     void execute() {
         auto blockPointer = getBlockPointer(m_psxRegs.pc); // pointer to the current x64 block
-        if (blockPointer == nullptr) { // if the block hasn't been compiled
+        if ((uintptr_t*) *blockPointer == nullptr) { // if the block hasn't been compiled
             printf("Compiling block\n");
             printf("PC: %08X\n", m_psxRegs.pc);
             recompileBlock(blockPointer); // compile a block, set block pointer to the address of the block
@@ -209,7 +209,7 @@ public:
         else
             printf ("Already compiled this block\n");
         
-        auto emittedCode = (JITCallback) blockPointer; // function pointer to the start of the block
+        auto emittedCode = (JITCallback) *blockPointer; // function pointer to the start of the block
         (*emittedCode)(); // call emitted code
         printf("$at: %08X\n", m_psxRegs.GPR.r[1]);
         printf("Execution will start from %08X in the next block\n", m_psxRegs.pc);
@@ -230,7 +230,7 @@ public:
         uintptr_t blockStart = (uintptr_t) gen.getCurr(); // the address the current block starts from
         
         printf("Current buffer address: %pX\n", blockStart);
-        blockPointer = (uintptr_t*) blockStart; // Add the block to the block cache
+        *blockPointer = (uintptr_t) blockStart; // Add the block to the block cache
      
         gen.push(rbp); // rbp is used as a pointer to the register struct, so we need to back it up
         gen.mov(rbp, (uint64_t) &m_psxRegs); // store the pointer in rbp
