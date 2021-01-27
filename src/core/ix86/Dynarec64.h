@@ -25,6 +25,8 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
     const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
     const uint32_t PC_OFFSET = 128 * 4; // the offset of the PC in the registers struct
+    const uint32_t COP0_REGS_OFFSET = 32 * 4; // the offset of the cop0 regs in the register structs
+    const uint32_t CAUSE_OFFSET = COP0_REGS_OFFSET + 13 * 4; // the offset of the CAUSE reg in the register struct
 
     typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
     typedef void (*JITCallback)(); // A function pointer to JIT-emitted code
@@ -121,7 +123,7 @@ public:
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recADDI, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
+        &X86DynaRecCPU::recCOP0, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 14
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 18
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
@@ -145,7 +147,7 @@ public:
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
-        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 28
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
@@ -162,7 +164,7 @@ public:
     }
 
     /// Allocate a MIPS register to an x64 register
-    void allocateRegister (unsigned regNumber) {
+    inline void allocateReg (unsigned regNumber) {
         if (registers[regNumber].allocated) return; // if the register has been allocated, exit
         printf ("Allocated %s to %s", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 
@@ -317,8 +319,8 @@ public:
         if (isConst(_Rs_)) // if Rs is const, mark Rt as const too
             markConst (_Rt_, registers[_Rs_].val | _ImmU_);
         else {
-            allocateRegister (_Rs_);
-            allocateRegister (_Rt_);
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
             registers[_Rt_].state = Unknown; // mark Rt as unknown
             gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov rt, rs
             gen.or_ (registers[_Rt_].allocatedReg, _ImmU_); // or $rt, imm
@@ -333,7 +335,7 @@ public:
         if (isConst(_Rs_))
             gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
         else {
-            allocateRegister(_Rs_);
+            allocateReg(_Rs_);
             gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
             gen.add (arg1, _Imm_); // arg1 += imm
         }
@@ -341,7 +343,7 @@ public:
         if (isConst(_Rt_))
             gen.mov (arg2, registers[_Rt_].val); // value in arg2
         else {
-            allocateRegister(_Rt_);
+            allocateReg(_Rt_);
             gen.mov (arg2, registers[_Rt_].allocatedReg);
         }
 
@@ -356,7 +358,7 @@ public:
         if (isConst(_Rs_))
             gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
         else {
-            allocateRegister(_Rs_);
+            allocateReg(_Rs_);
             gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
             gen.add (arg1, _Imm_); // arg1 += imm
         }
@@ -364,7 +366,7 @@ public:
         if (isConst(_Rt_))
             gen.mov (arg2, registers[_Rt_].val); // value in arg2
         else {
-            allocateRegister(_Rt_);
+            allocateReg(_Rt_);
             gen.mov (arg2, registers[_Rt_].allocatedReg);
         }
 
@@ -396,6 +398,59 @@ public:
         const uint32_t newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
         m_psxRegs.pc = newPC; // set new PC
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
+    }
+
+    void recOR() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rt_].val | registers[_Rs_].val);
+        
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.or_ (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd |= rs
+        }
+
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.or_ (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd |= rt
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.or_ (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd |= $rt
+        }
+    }
+
+    void recCOP0() {
+        switch (_Rs_) { // figure out the type of COP0 opcode
+            case 4: recMTC0(); break;
+            default: printf ("Unimplemented cop0 op %02X\n", _Rs_); exit (1); break; 
+        }
+    }
+
+    void recMTC0() {
+        if (isConst(_Rt_)) { // if the value to store is constant 
+            if (_Rd_ == 13) // if writing to CAUSE
+                gen.mov (dword [rbp + CAUSE_OFFSET], registers[_Rd_].val & ~0xFC00); // apply the proper mask to the reg and store
+            else // if not writing to CAUSE
+                gen.mov (dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4], registers[_Rd_].val); // store reg
+        }
+
+        else { // if the value to store is not constant
+            allocateReg (_Rt_);
+            gen.mov (dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4], registers[_Rt_].allocatedReg); // store $rt in the cop 0 reg
+            
+            if (_Rd_ == 13) // If rd == CAUSE, apply mask
+                gen.and_ (dword [rbp + CAUSE_OFFSET], ~0xFC00); 
+        }
     }
 
     /// dump the JIT command buffer, for stuff like viewing it in a disassembler
