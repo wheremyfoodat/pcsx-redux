@@ -120,7 +120,7 @@ public:
 
     const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functions for basic instructions
         &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recNULL,  // 00
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
+        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recADDI, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
         &X86DynaRecCPU::recCOP0, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
@@ -246,10 +246,10 @@ public:
             instructionPointer = (uint32_t*) PSXM(recPC);  // get pointer to instruction
             assert(instructionPointer != NULL);           // check the pointer is not null
             m_psxRegs.code = *instructionPointer;         // read the instruction
+            recPC += 4;  // increment PC by sizeof(instruction)
+
             printf("Read instruction %08X from address %08X\n", m_psxRegs.code, recPC);
             (*this.*recBasic[m_psxRegs.code >> 26])();        // Call the function to compile the instruction (The >> 26 is to fetch the ocpode)
-
-            recPC += 4;              // increment PC by sizeof(instruction)
             compiledInstructions++;  // increment the compiled instructions counter
         }
 
@@ -398,6 +398,43 @@ public:
         const uint32_t newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
         m_psxRegs.pc = newPC; // set new PC
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
+    }
+
+    void recBNE() {
+        m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
+        compiling = false; // stop compiling
+
+        const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+        if (target == recPC + 4) return; // If target == recPC + 4, we'll jump to the same address whether or not we take the branch, so don't compile it
+        if (isConst(_Rs_) && isConst(_Rt_)) {  // if both operands are constant
+            if (registers[_Rs_].val != registers[_Rt_].val) {  // and they're not equal
+                gen.mov (dword[rbp + PC_OFFSET], target); // store new PC
+                return; // dip
+            }
+        }
+
+        Xbyak::Label branchSkipped; // label to jump to if the branch is skipped
+        if (isConst(_Rs_)) { // if only Rs is const
+            allocateReg(_Rt_);
+            gen.cmp (registers[_Rt_].allocatedReg, registers[_Rs_].val); // compare rs and rt
+            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+        }
+
+        else if (isConst(_Rt_)) { // else if only Rt is const
+            allocateReg(_Rs_);
+            gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].val); // compare rs and rt
+            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+        }
+
+        else { // nothing is constant
+            allocateReg(_Rs_);
+            allocateReg(_Rt_);
+            gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare rs and rt again
+            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+        }
+
+        gen.mov (dword[rbp + PC_OFFSET], target); // if the branch was not skipped, set PC to target
+        gen.L(branchSkipped); // set branch skipped label here
     }
 
     void recOR() {
