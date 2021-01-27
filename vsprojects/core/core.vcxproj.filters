@@ -132,18 +132,6 @@
     <ClCompile Include="..\..\src\core\web-server.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\core\ix86\XByak\b2hex.cpp">
-      <Filter>Header Files\ix86\XByak</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\core\ix86\XByak\gen_avx512.cpp">
-      <Filter>Header Files\ix86\XByak</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\core\ix86\XByak\gen_code.cpp">
-      <Filter>Header Files\ix86\XByak</Filter>
-    </ClCompile>
-    <ClCompile Include="..\..\src\core\ix86\XByak\sortline.cpp">
-      <Filter>Header Files\ix86\XByak</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\core\cdriso.h">

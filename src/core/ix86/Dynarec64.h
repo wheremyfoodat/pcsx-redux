@@ -8,11 +8,19 @@
 #include "core/system.h"
 
 // Wrapper functions (these need to be global)
-    /// Write a 32-bit value to memory[mem]
+
+/// Write a 32-bit value to memory[mem]
+void psxMemWrite8Wrapper(uint32_t address, uint8_t value) {
+    PCSX::g_emulator->m_psxMem->psxMemWrite8(address, value);
+    printf("Wrote %02X to %08X\n", value, address);
+}
+
+/// Write a 32-bit value to memory[mem]
 void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
     PCSX::g_emulator->m_psxMem->psxMemWrite32(address, value);
     printf("Wrote %08X to %08X\n", value, address);
 }
+
 
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
@@ -120,7 +128,7 @@ public:
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 20
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
+        &X86DynaRecCPU::recSB, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 2c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 30
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 34
@@ -185,7 +193,7 @@ public:
         auto blockPointer = getBlockPointer(m_psxRegs.pc); // pointer to the current x64 block
         if (blockPointer == nullptr) { // if the block hasn't been compiled
             printf("Compiling block\n");
-            printf("PC: %08X", m_psxRegs.pc);
+            printf("PC: %08X\n", m_psxRegs.pc);
             recompileBlock(blockPointer); // compile a block, set block pointer to the address of the block
             printf("Compiled block\n"); // now
         }
@@ -198,6 +206,7 @@ public:
         printf("$at: %08X\n", m_psxRegs.GPR.r[1]);
         printf("Execution will start from %08X in the next block", m_psxRegs.pc);
         printf("Survived executing a block\n");
+        printf("Add cycles!!\n");
         exit(1);
     }
 
@@ -301,6 +310,29 @@ public:
     }
 
     // TODO: Optimize
+    void recSB() { 
+        assert (4 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        gen.mov (rax, (uint64_t) &psxMemWrite8Wrapper); // function pointer in rax
+
+        if (isConst(_Rs_))
+            gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+        else {
+            allocateRegister(_Rs_);
+            gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
+            gen.add (arg1, _Imm_); // arg1 += imm
+        }
+
+        if (isConst(_Rt_))
+            gen.mov (arg2, registers[_Rt_].val); // value in arg2
+        else {
+            allocateRegister(_Rt_);
+            gen.mov (arg2, registers[_Rt_].allocatedReg);
+        }
+
+        gen.call (rax); // call wrapper
+    }
+
+    // TODO: Optimize
     void recSW() { 
         assert (4 > allocatedRegisters); // assert that we're not trampling any allocated regs
         gen.mov (rax, (uint64_t) &psxMemWrite32Wrapper); // function pointer in rax
@@ -347,7 +379,7 @@ public:
         const uint32_t immediate = (m_psxRegs.code & 0x3FFFFFF) << 2; // fetch the immediate (26 low bits of instruction) and multiply by 4
         const uint32_t newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
         gen.mov(dword[rbp + PC_OFFSET], newPC); // set PC to new PC
-        printf("[JIT64] End of block. Jumped to %08X\n", m_psxRegs.pc);
+        printf("[JIT64] End of block. Jumped to %08X\n", newPC);
     }
 
     void dumpBuffer() {

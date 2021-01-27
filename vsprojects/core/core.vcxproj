@@ -130,10 +130,6 @@
     <ClCompile Include="..\..\src\core\gte.cc" />
     <ClCompile Include="..\..\src\core\ix86\iR3000A.cc" />
     <ClCompile Include="..\..\src\core\ix86\ix86.cc" />
-    <ClCompile Include="..\..\src\core\ix86\XByak\b2hex.cpp" />
-    <ClCompile Include="..\..\src\core\ix86\XByak\gen_avx512.cpp" />
-    <ClCompile Include="..\..\src\core\ix86\XByak\gen_code.cpp" />
-    <ClCompile Include="..\..\src\core\ix86\XByak\sortline.cpp" />
     <ClCompile Include="..\..\src\core\mdec.cc" />
     <ClCompile Include="..\..\src\core\misc.cc" />
     <ClCompile Include="..\..\src\core\pad.cc" />
