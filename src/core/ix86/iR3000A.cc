@@ -43,6 +43,10 @@
 #include "core/r3000a.h"
 #include "core/system.h"
 #include "spu/interface.h"
+#include "XByak/xbyak.h" // For 64-bit JIT. TODO: Only include if using it
+
+using namespace Xbyak;
+using namespace Xbyak::util;
 
 namespace {
 
@@ -3213,7 +3217,7 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
 };
 
  #else // x64
-    #include "LunaRec.h"
+    #include "Dynarec64.h"
 #endif
 }; // namespace 
 

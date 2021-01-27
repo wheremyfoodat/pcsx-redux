@@ -19,6 +19,9 @@
     <Filter Include="Source Files\ix86">
       <UniqueIdentifier>{f3ac4441-f8d0-4cf2-8c18-a1a8df1e5c67}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\ix86\XByak">
+      <UniqueIdentifier>{080dd5dd-8a39-447d-b0a1-0e72918fdde3}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\src\core\ix86\iR3000A.cc">
@@ -129,6 +132,18 @@
     <ClCompile Include="..\..\src\core\web-server.cc">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\core\ix86\XByak\b2hex.cpp">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\core\ix86\XByak\gen_avx512.cpp">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\core\ix86\XByak\gen_code.cpp">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\src\core\ix86\XByak\sortline.cpp">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\core\cdriso.h">
@@ -215,9 +230,6 @@
     <ClInclude Include="..\..\src\core\ix86\ix86.h">
       <Filter>Header Files\ix86</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\core\ix86\Luna.hpp">
-      <Filter>Header Files\ix86</Filter>
-    </ClInclude>
     <ClInclude Include="..\..\src\core\psxemulator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -248,11 +260,29 @@
     <ClInclude Include="..\..\src\core\web-server.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\core\ix86\LunaRec.h">
+    <ClInclude Include="..\..\src\core\ix86\XByak\avx_type.hpp">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak.h">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak_bin2hex.h">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak_mnemonic.h">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak_util.h">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\core\ix86\Dynarec64.h">
       <Filter>Header Files\ix86</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="..\..\src\core\ix86\XByak\Makefile">
+      <Filter>Header Files\ix86\XByak</Filter>
+    </None>
   </ItemGroup>
 </Project>
