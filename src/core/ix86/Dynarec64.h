@@ -21,7 +21,6 @@ void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
     printf("Wrote %08X to %08X\n", value, address);
 }
 
-
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
     const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
@@ -157,7 +156,8 @@ public:
 
     /// Mark registers[reg] as constant, with a value of "value"
     inline void markConst(int reg, uint32_t value) {
-        registers[reg].state = Constant;
+        registers[reg].state = Constant; // mark constant
+        registers[reg].allocated = false; // unallocate register
         registers[reg].val = value;
     }
 
@@ -168,7 +168,15 @@ public:
 
         registers[regNumber].allocated = true; // mark reg as allocated
         registers[regNumber].allocatedReg = allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
-        // gen.mov (registers[regNumber].allocatedRegs, dword [registerPointer + regNumber * 4]); // load the cached reg to the host reg
+        
+        if (isConst(regNumber)) {  // if the register is constant, load it from the constant regs and mark it as non-constant
+            gen.mov(registers[regNumber].allocatedReg, registers[regNumber].val);
+            registers[regNumber].state = Unknown;
+        }
+        
+        else
+            gen.mov (registers[regNumber].allocatedReg, dword [rbp + regNumber * 4]); // load the cached reg to the host reg
+
         printf ("TODO: 32-bit addressing\n");
         assert (allocatedRegisters <= 8); // assert that we didn't overallocate
     }
@@ -256,12 +264,18 @@ public:
     void flushRegs() { 
         for (auto i = 1; i < 32; i++) 
             flushReg(i); // flush every reg except from $zero since that doesn't need flushing
+        allocatedRegisters = 0; // we don't have any allocated regs anymore
     }
 
     void flushReg(int reg) { 
         if (isConst(reg)) {
             gen.mov(dword [rbp + (reg * 4)], registers[reg].val); // back up const regs to memory
             registers[reg].state = Unknown; // mark as non-const
+        }
+
+        else if (registers[reg].allocated) {
+            gen.mov(dword[rbp + (reg * 4)], registers[reg].allocatedReg); // store allocated regs into memory
+            registers[reg].allocated = false;  // mark them as non-allocated
         }
 
         registers[reg].allocated = false; // unallocate allocated x64 reg
@@ -382,6 +396,7 @@ public:
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
     }
 
+    /// dump the JIT command buffer, for stuff like viewing it in a disassembler
     void dumpBuffer() {
         auto index = getBufferIndex();
         std::ofstream file ("output.bin", std::ios::binary);
