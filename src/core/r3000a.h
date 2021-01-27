@@ -160,12 +160,12 @@ enum {
 };
 
 struct psxRegisters {
-    psxGPRRegs GPR;  /* General Purpose Registers */
-    psxCP0Regs CP0;  /* Coprocessor0 Registers */
-    psxCP2Data CP2D; /* Cop2 data registers */
-    psxCP2Ctrl CP2C; /* Cop2 control registers */
-    uint32_t pc;     /* Program counter */
-    uint32_t code;   /* The instruction */
+    psxGPRRegs GPR;  /* General Purpose Registers, 32 * 4 bytes */
+    psxCP0Regs CP0;  /* Coprocessor0 Registers, 32 * 4 bytes */
+    psxCP2Data CP2D; /* Cop2 data registers, 32 * 4 bytes */
+    psxCP2Ctrl CP2C; /* Cop2 control registers, 32 * 4 bytes */
+    uint32_t pc;     /* Program counter, 4 bytes */
+    uint32_t code;   /* The instruction, 4 bytes */
     uint32_t cycle;
     uint32_t interrupt;
     std::atomic<bool> spuInterrupt;

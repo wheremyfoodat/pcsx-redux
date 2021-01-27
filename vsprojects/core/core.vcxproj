@@ -130,6 +130,10 @@
     <ClCompile Include="..\..\src\core\gte.cc" />
     <ClCompile Include="..\..\src\core\ix86\iR3000A.cc" />
     <ClCompile Include="..\..\src\core\ix86\ix86.cc" />
+    <ClCompile Include="..\..\src\core\ix86\XByak\b2hex.cpp" />
+    <ClCompile Include="..\..\src\core\ix86\XByak\gen_avx512.cpp" />
+    <ClCompile Include="..\..\src\core\ix86\XByak\gen_code.cpp" />
+    <ClCompile Include="..\..\src\core\ix86\XByak\sortline.cpp" />
     <ClCompile Include="..\..\src\core\mdec.cc" />
     <ClCompile Include="..\..\src\core\misc.cc" />
     <ClCompile Include="..\..\src\core\pad.cc" />
@@ -168,8 +172,12 @@
     <ClInclude Include="..\..\src\core\gpu.h" />
     <ClInclude Include="..\..\src\core\gte.h" />
     <ClInclude Include="..\..\src\core\ix86\ix86.h" />
-    <ClInclude Include="..\..\src\core\ix86\Luna.hpp" />
-    <ClInclude Include="..\..\src\core\ix86\LunaRec.h" />
+    <ClInclude Include="..\..\src\core\ix86\Dynarec64.h" />
+    <ClInclude Include="..\..\src\core\ix86\XByak\avx_type.hpp" />
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak.h" />
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak_bin2hex.h" />
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak_mnemonic.h" />
+    <ClInclude Include="..\..\src\core\ix86\XByak\xbyak_util.h" />
     <ClInclude Include="..\..\src\core\logger.h" />
     <ClInclude Include="..\..\src\core\mdec.h" />
     <ClInclude Include="..\..\src\core\misc.h" />
@@ -197,6 +205,7 @@
     <ClInclude Include="..\..\src\core\web-server.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\src\core\ix86\XByak\Makefile" />
     <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
