@@ -47,7 +47,7 @@ public:
 // interface methods
     virtual bool isDynarec() final { return true; } // This dynarec is a dynarec, yes
     inline bool Implemented() final { return true; }  // This is implemented in 64-bit mode
-    virtual void Execute() { execute(); }
+    virtual void Execute() { while (hasToRun()) execute(); }
     virtual void Reset() { printf("Add resetting to x64 JIT!\n"); }
     virtual void Clear(uint32_t Addr, uint32_t Size) { printf("Add clearing to x64 JIT\n");  }
     virtual void Shutdown() { printf("Add shutdown to x64 JIT\n"); }
@@ -186,7 +186,7 @@ public:
     inline uintptr_t* getBlockPointer (uint32_t pc) {
         uintptr_t base = validBlockLUT[pc >> 16];
         uintptr_t offset = pc & 0xFFFF;
-        uintptr_t* pointer = (uintptr_t*) (base + offset);
+        uintptr_t* pointer = (uintptr_t*) (base + offset * sizeof(uintptr_t));
 
         return (uintptr_t*) *pointer;
     }
@@ -212,23 +212,24 @@ public:
         auto emittedCode = (JITCallback) blockPointer; // function pointer to the start of the block
         (*emittedCode)(); // call emitted code
         printf("$at: %08X\n", m_psxRegs.GPR.r[1]);
-        printf("Execution will start from %08X in the next block", m_psxRegs.pc);
-        printf("Survived executing a block\n");
+        printf("Execution will start from %08X in the next block\n", m_psxRegs.pc);
         printf("Add cycles!!\n");
-        exit(1);
     }
 
     /// Compile a MIPS block
     /// Params: blockPointer -> The address to store the start of the current block
     void recompileBlock (uintptr_t*& blockPointer) {
+        compiling = true; // Tell the recompiler that we are, in fact, recompiling.
         assert(getBufferIndex() < REC_MEMORY_SIZE);  // check that we haven't overflowed our code buffer
         printf("Align me!\n");                           // TODO: Alignment
         uint32_t* instructionPointer;                    // pointer to the instruction to compile
 
         recPC = m_psxRegs.pc;    // the PC of the recompiler
+        printf ("Compiling block: Rec PC: %08X\n", recPC);
         uint32_t oldPC = recPC;  // the PC at the start of the block
-            
         uintptr_t blockStart = (uintptr_t) gen.getCurr(); // the address the current block starts from
+        
+        printf("Current buffer address: %pX\n", blockStart);
         blockPointer = (uintptr_t*) blockStart; // Add the block to the block cache
      
         gen.push(rbp); // rbp is used as a pointer to the register struct, so we need to back it up
@@ -243,6 +244,7 @@ public:
             instructionPointer = (uint32_t*) PSXM(recPC);  // get pointer to instruction
             assert(instructionPointer != NULL);           // check the pointer is not null
             m_psxRegs.code = *instructionPointer;         // read the instruction
+            printf("Read instruction %08X from address %08X\n", m_psxRegs.code, recPC);
             (*this.*recBasic[m_psxRegs.code >> 26])();        // Call the function to compile the instruction (The >> 26 is to fetch the ocpode)
 
             recPC += 4;              // increment PC by sizeof(instruction)
@@ -392,7 +394,7 @@ public:
 
         const uint32_t immediate = (m_psxRegs.code & 0x3FFFFFF) << 2; // fetch the immediate (26 low bits of instruction) and multiply by 4
         const uint32_t newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
-        gen.mov(dword[rbp + PC_OFFSET], newPC); // set PC to new PC
+        m_psxRegs.pc = newPC; // set new PC
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
     }
 
