@@ -211,9 +211,6 @@ public:
         
         else
             gen.mov (registers[regNumber].allocatedReg, dword [rbp + regNumber * 4]); // load the cached reg to the host reg
-
-        printf ("TODO: 32-bit addressing\n");
-        assert (allocatedRegisters <= 7); // assert that we didn't allocate a volatile
     }
 
     /// Params: A program counter value
