@@ -93,7 +93,10 @@ public:
     
     /// invalidate block
     virtual void Clear(uint32_t addr, uint32_t size) final { 
-        assert ((addr >> 16) != (m_psxRegs.pc >> 16)); // assert the write is not on the same page as the PC
+        if ((addr >> 16) == (m_psxRegs.pc >> 16)) {  // if write is on the same page as the PC
+            printf("Write to the PC page. Fuck... (SMC?)\n");
+        }
+
         auto block = getBlockPointer (addr); // get address of block
         *block = 0; // mark block as uncompiled
 
@@ -158,7 +161,7 @@ public:
 
     const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functions for basic instructions
         &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recJAL,  // 00
-        &X86DynaRecCPU::recBEQ, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
+        &X86DynaRecCPU::recBEQ, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recBLEZ, &X86DynaRecCPU::recBGTZ,  // 04
         &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
         &X86DynaRecCPU::recANDI, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
         &X86DynaRecCPU::recCOP0, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
@@ -166,7 +169,7 @@ public:
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 18
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
         &X86DynaRecCPU::recLB, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLW,  // 20
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
+        &X86DynaRecCPU::recLBU, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
         &X86DynaRecCPU::recSB, &X86DynaRecCPU::recSH, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 2c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 30
@@ -184,8 +187,8 @@ public:
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 14
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
-        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
-        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
+        &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
+        &X86DynaRecCPU::recAND, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSLTU,  // 28
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
@@ -207,6 +210,29 @@ public:
         printf ("Allocated %s to %s\n", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 
         registers[regNumber].allocated = true; // mark reg as allocated
+        
+        // Todo: Add support for allocating volatiles, as flushing is *really* slow
+        if (allocatedRegisters >= 7) {
+            printf("Ran out of non-volatiles! Flushing non-volatiles!\nTODO: Add support for allocating volatiles!\n");
+            
+            for (auto i = 1; i < 32; i++) {
+                if (registers[i].allocated) {// back up every single allocated reg
+                    gen.mov (dword [rbp + i * 4], registers[i].allocatedReg); // flush allocated reg to memory
+                    registers[i].allocated = false; // this reg is no longer allocated
+                }
+            }
+
+            // restore non-volatiles...
+            gen.mov(rbx, qword[rbp + REG_CACHE_OFFSET + 48]);
+            gen.mov(rsi, qword[rbp + REG_CACHE_OFFSET + 40]);
+            gen.mov(rdi, qword[rbp + REG_CACHE_OFFSET + 32]);
+            gen.mov(r15, qword[rbp + REG_CACHE_OFFSET + 24]);
+            gen.mov(r14, qword[rbp + REG_CACHE_OFFSET + 16]);
+            gen.mov(r13, qword[rbp + REG_CACHE_OFFSET + 8]);
+            gen.mov(r12, qword[rbp + REG_CACHE_OFFSET]);
+            allocatedRegisters = 0;
+        }
+
         registers[regNumber].allocatedReg = allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
         
         switch (allocatedRegisters) { // if non-volatile, preserve before allocating
@@ -217,11 +243,6 @@ public:
             case 5: gen.mov(rdi, qword[rbp + REG_CACHE_OFFSET + 32]); break;
             case 6: gen.mov(rsi, qword[rbp + REG_CACHE_OFFSET + 40]); break;
             case 7: gen.mov(rbx, qword[rbp + REG_CACHE_OFFSET + 48]); break;
-        }
-
-        if (allocatedRegisters >= 8) {
-            printf("Add handling for allocating volatiles!\n");
-            exit(1);
         }
 
         if (isConst(regNumber)) {  // if the register is constant, load it from the constant regs and mark it as non-constant
@@ -486,6 +507,25 @@ public:
     }
 
     // TODO: Optimize
+    void recLBU() { // Literally LB with zero extension
+        if (!_Rt_) return; // don't compile if NOP
+        assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        gen.mov (rax, (uint64_t) &psxMemRead8Wrapper); // function pointer in rax
+        allocateReg(_Rt_); // allocate rt and mark as non const
+
+        if (isConst(_Rs_))
+            gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+        else {
+            allocateReg(_Rs_);
+            gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
+            gen.add (arg1, _Imm_); // arg1 += imm
+        }
+
+        gen.call (rax); // call wrapper
+        gen.movzx (registers[_Rt_].allocatedReg, al); // move sign extended result to rt
+    }
+
+    // TODO: Optimize
     void recLW() { 
         if (!_Rt_) return; // don't compile if NOP
         assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
@@ -506,7 +546,16 @@ public:
 
     void recSLL() {
         if (!_Rd_) return; // don't compile if NOP
-        assert(1 == 0); // Implement this later
+        
+        if (isConst(_Rt_)) // if $rt is const
+            markConst (_Rd_, registers[_Rt_].val << (_Sa_ & 31)); // mask shift amount and do ($rd = $rs << sa)
+    
+        else { // nothing is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.shl (registers[_Rd_].allocatedReg, _Sa_); // $rd <<= shift amount (Note: No need to mask by 31, as x86 implicitly does that)
+        }
     }
 
     // This is temporarily used for ADDI too, since we don't account for overflows yet. TODO: Fix
@@ -638,6 +687,58 @@ public:
         gen.L(exit); // exit point
     }
 
+    void recBGTZ() {
+        m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
+        compiling = false; // stop compiling
+        const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+
+        if (isConst(_Rs_)) {// if $rs is constant 
+            if ((int32_t) registers[_Rs_].val > 0) { // if operand is greater than zero
+                gen.mov (dword[rbp + PC_OFFSET], target); // store new PC
+                return; // dip
+            }
+        }
+
+        Xbyak::Label branchSkipped, exit;
+        allocateReg (_Rs_);
+        gen.test (registers[_Rs_].allocatedReg, registers[_Rs_].allocatedReg); // update flags based on $rs
+        gen.jle (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if le => $rs <= 0, so skip the branch
+
+        // code if branch taken
+        gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
+        gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
+
+        gen.L(branchSkipped); // code if branch skipped
+        gen.mov (dword[rbp + PC_OFFSET], recPC); // if the branch was skipped, set PC to recompiler PC
+        gen.L(exit); // exit point
+    }
+
+    void recBLEZ() {
+        m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
+        compiling = false; // stop compiling
+        const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+
+        if (isConst(_Rs_)) {// if $rs is constant 
+            if ((int32_t) registers[_Rs_].val <= 0) { // if operand is greater than zero
+                gen.mov (dword[rbp + PC_OFFSET], target); // store new PC
+                return; // dip
+            }
+        }
+
+        Xbyak::Label branchSkipped, exit;
+        allocateReg (_Rs_);
+        gen.test (registers[_Rs_].allocatedReg, registers[_Rs_].allocatedReg); // update flags based on $rs
+        gen.jg (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if g => $rs > 0, so skip the branch
+
+        // code if branch taken
+        gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
+        gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
+
+        gen.L(branchSkipped); // code if branch skipped
+        gen.mov (dword[rbp + PC_OFFSET], recPC); // if the branch was skipped, set PC to recompiler PC
+        gen.L(exit); // exit point
+    }
+
     void recOR() {
         if (!_Rd_) return; // do not compile if NOP
 
@@ -666,7 +767,38 @@ public:
             gen.or_ (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd |= $rt
         }
     }
+
+    void recAND() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rt_].val & registers[_Rs_].val);
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.and_ (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd &= rt
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.and_ (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd &= rs
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.and_ (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd &= $rt
+        }
+    }
     
+    // Note: This is currently used for both ADDU and ADD
+    // TODO: Split ADD and ADDU, implement overflow exceptions
     void recADDU() {
         if (!_Rd_) return; // do not compile if NOP
 
