@@ -42,7 +42,8 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
     const uint32_t COP0_REGS_OFFSET = (uintptr_t) &m_psxRegs.CP0 - (uintptr_t) &m_psxRegs; // the offset of the cop0 regs in the register structs
     const uint32_t CAUSE_OFFSET = (uintptr_t) &m_psxRegs.CP0.r[13] - (uintptr_t) &m_psxRegs; // the offset of the CAUSE reg in the register struct
     const uint32_t REG_CACHE_OFFSET = (uintptr_t) &m_psxRegs.hostRegisterCache - (uintptr_t) &m_psxRegs; // the offset of the cached host registers in the register struct
-    
+    const uint32_t CYCLE_OFFSET = (uintptr_t) &m_psxRegs.cycles - (uintptr_t) &m_psxRegs; // the offset of the cycle variable in the register struct
+
     typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
     typedef void (*JITCallback)(); // A function pointer to JIT-emitted code
 
@@ -294,6 +295,7 @@ public:
             compiledInstructions++;  // increment the compiled instructions counter
         }
 
+        gen.add(dword [rbp + CYCLE_OFFSET], compiledInstructions); // add 1 cycle for each compiled instruction that was executed
         gen.add(rsp, 100); // undo the sub
         flushRegs(); // flush the cached registers
         gen.pop(rbp); // restore rbp
