@@ -12,19 +12,26 @@
 /// Write an 8-bit value to memory[mem]
 void psxMemWrite8Wrapper(uint32_t address, uint8_t value) {
     PCSX::g_emulator->m_psxMem->psxMemWrite8(address, value);
-    printf("Wrote %02X to %08X\n", value, address);
+    //printf("Wrote %02X to %08X\n", value, address);
 }
 
 /// Write a 16-bit value to memory[mem]
 void psxMemWrite16Wrapper(uint32_t address, uint16_t value) {
     PCSX::g_emulator->m_psxMem->psxMemWrite8(address, value);
-    printf("Wrote %04X to %08X\n", value, address);
+    //printf("Wrote %04X to %08X\n", value, address);
 }
 
 /// Write a 32-bit value to memory[mem]
 void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
     PCSX::g_emulator->m_psxMem->psxMemWrite32(address, value);
-    printf("Wrote %08X to %08X\n", value, address);
+    //printf("Wrote %08X to %08X\n", value, address);
+}
+
+/// Read an 8-bit value from memory[mem]
+uint8_t psxMemRead8Wrapper(uint32_t address) {
+    auto val = PCSX::g_emulator->m_psxMem->psxMemRead8(address);
+    //printf("Read %02X from %08X\n", val, address);
+    return val;
 }
 
 /// Read a 32-bit value from memory[mem]
@@ -42,7 +49,7 @@ class X86DynaRecCPU : public PCSX::R3000Acpu {
     const uint32_t COP0_REGS_OFFSET = (uintptr_t) &m_psxRegs.CP0 - (uintptr_t) &m_psxRegs; // the offset of the cop0 regs in the register structs
     const uint32_t CAUSE_OFFSET = (uintptr_t) &m_psxRegs.CP0.r[13] - (uintptr_t) &m_psxRegs; // the offset of the CAUSE reg in the register struct
     const uint32_t REG_CACHE_OFFSET = (uintptr_t) &m_psxRegs.hostRegisterCache - (uintptr_t) &m_psxRegs; // the offset of the cached host registers in the register struct
-    const uint32_t CYCLE_OFFSET = (uintptr_t) &m_psxRegs.cycles - (uintptr_t) &m_psxRegs; // the offset of the cycle variable in the register struct
+    const uint32_t CYCLE_OFFSET = (uintptr_t) &m_psxRegs.cycle - (uintptr_t) &m_psxRegs; // the offset of the cycle variable in the register struct
 
     typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
     typedef void (*JITCallback)(); // A function pointer to JIT-emitted code
@@ -90,7 +97,7 @@ public:
         auto block = getBlockPointer (addr); // get address of block
         *block = 0; // mark block as uncompiled
 
-        printf("Fix page invalidation to x64 JIT\n"); 
+        //printf("Fix page invalidation to x64 JIT\n"); 
     };  
 
     virtual bool Init() final {
@@ -150,15 +157,15 @@ public:
     bool compiling = true;  // Are we compiling code right now?
 
     const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functions for basic instructions
-        &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recNULL,  // 00
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
+        &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recJAL,  // 00
+        &X86DynaRecCPU::recBEQ, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
         &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
+        &X86DynaRecCPU::recANDI, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
         &X86DynaRecCPU::recCOP0, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 14
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 18
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLW,  // 20
+        &X86DynaRecCPU::recLB, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLW,  // 20
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
         &X86DynaRecCPU::recSB, &X86DynaRecCPU::recSH, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 2c
@@ -171,7 +178,7 @@ public:
     const FunctionPointer recSpecial [64] = { // Function pointer table to the compilation functions for special instructions
         &X86DynaRecCPU::recSLL, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 00
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 04
-        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 08
+        &X86DynaRecCPU::recJR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 08
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 0c
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 10
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 14
@@ -248,16 +255,12 @@ public:
             printf("Compiling block\n");
             printf("PC: %08X\n", m_psxRegs.pc);
             recompileBlock(blockPointer); // compile a block, set block pointer to the address of the block
-            printf("Compiled block\n"); // now
         }
-        
-        else
-            printf ("Already compiled this block\n");
         
         auto emittedCode = (JITCallback) *blockPointer; // function pointer to the start of the block
         (*emittedCode)(); // call emitted code
-        printRegs();
-        printf("Add cycles!!\n");
+        printf("PC: %08X\n", m_psxRegs.pc);
+        // printRegs();
     }
 
     /// Compile a MIPS block
@@ -381,9 +384,22 @@ public:
         }
     }
 
+    void recANDI() {
+        if (!_Rt_) return; // don't compile if NOP
+
+        if (isConst(_Rs_)) // if Rs is const, mark Rt as const too
+            markConst (_Rt_, registers[_Rs_].val & _ImmU_);
+        else {
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov rt, rs
+            gen.and_ (registers[_Rt_].allocatedReg, _ImmU_); // and $rt, imm
+        }
+    }
+
     // TODO: Optimize
     void recSB() { 
-        assert (4 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
         gen.mov (rax, (uint64_t) &psxMemWrite8Wrapper); // function pointer in rax
 
         if (isConst(_Rs_))
@@ -451,6 +467,25 @@ public:
     }
 
     // TODO: Optimize
+    void recLB() { 
+        if (!_Rt_) return; // don't compile if NOP
+        assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        gen.mov (rax, (uint64_t) &psxMemRead8Wrapper); // function pointer in rax
+        allocateReg(_Rt_); // allocate rt and mark as non const
+
+        if (isConst(_Rs_))
+            gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+        else {
+            allocateReg(_Rs_);
+            gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
+            gen.add (arg1, _Imm_); // arg1 += imm
+        }
+
+        gen.call (rax); // call wrapper
+        gen.movsx (registers[_Rt_].allocatedReg, al); // move sign extended result to rt
+    }
+
+    // TODO: Optimize
     void recLW() { 
         if (!_Rt_) return; // don't compile if NOP
         assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
@@ -491,16 +526,77 @@ public:
 
     void recJ() {
         compiling = false; // mark this as the end of the block
-        m_nextIsDelaySlot = true;
+        m_nextIsDelaySlot = true; // next instruction will be in a delay slot, as this is a branch
 
         const uint32_t immediate = (m_psxRegs.code & 0x3FFFFFF) << 2; // fetch the immediate (26 low bits of instruction) and multiply by 4
         const uint32_t newPC = ((recPC & 0xF0000000) | immediate); // Lower 28 bits of PC are replaced by the immediate, top 4 bits of PC are kept
-        m_psxRegs.pc = newPC; // set new PC
+        gen.mov (dword [rbp + PC_OFFSET], newPC); // set new PC
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
     }
 
-    // TODO: Fix how missing the branch is handled
+    void recJAL() {
+        markConst (31, recPC + 4); // store the return address in $ra and mark as const
+        recJ(); // then do the same stuff we'd do for J
+    }
+
+    void recJR() { 
+        compiling = false; // mark this as the end of the block
+        m_nextIsDelaySlot = true; // next instruction will be in a delay slot, as this is a branch
+
+        if (isConst(_Rs_)) // if $rs is constant
+            gen.mov (dword [rbp + PC_OFFSET], registers[_Rs_].val & ~3); // set PC to $rs and force align (TODO: Misalignment exceptions)
+
+        else {
+            allocateReg(_Rs_);
+            gen.mov (eax, registers[_Rs_].allocatedReg); // $rs in eax
+            gen.and_ (eax, ~3); // force align address
+            gen.mov (dword[rbp + PC_OFFSET], eax); // store $rs in PC
+        }
+    }
+
     void recBNE() {
+        m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
+        compiling = false; // stop compiling
+        const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+
+        if (isConst(_Rs_) && isConst(_Rt_)) {  // if both operands are constant
+            if (registers[_Rs_].val != registers[_Rt_].val) {  // and they're not equal
+                gen.mov (dword[rbp + PC_OFFSET], target); // store new PC
+                return; // dip
+            }
+        }
+
+        Xbyak::Label branchSkipped, exit;
+
+        if (isConst(_Rs_)) { // if only Rs is const
+            allocateReg(_Rt_);
+            gen.cmp (registers[_Rt_].allocatedReg, registers[_Rs_].val); // compare rs and rt
+            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+        }
+
+        else if (isConst(_Rt_)) { // else if only Rt is const
+            allocateReg(_Rs_);
+            gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].val); // compare rs and rt
+            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+        }
+
+        else { // nothing is constant
+            allocateReg(_Rs_);
+            allocateReg(_Rt_);
+            gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare rs and rt again
+            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+        }
+
+        // code if branch taken
+        gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
+        gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
+
+        gen.L(branchSkipped); // code if branch skipped
+        gen.mov (dword[rbp + PC_OFFSET], recPC); // if the branch was skipped, set PC to recompiler PC
+        gen.L(exit); // exit point
+    }
+
+    void recBEQ() {
         m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
         compiling = false; // stop compiling
         const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
@@ -634,11 +730,19 @@ public:
 
     void recCOP0() {
         switch (_Rs_) { // figure out the type of COP0 opcode
-            case 4: recMTC0(); break;
+            case 0: recMFC0(); break; // MFC0 
+            case 4: recMTC0(); break; // MTC0
             default: printf ("Unimplemented cop0 op %02X\n", _Rs_); exit (1); break; 
         }
     }
 
+    void recMFC0() {
+        if (!_Rt_) return; // don't compile if NOP
+        allocateReg (_Rd_); 
+        gen.mov (registers[_Rd_].allocatedReg, dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4]); // load cop0 reg into 
+    }
+
+    // Todo: Handle unwriteable regs
     void recMTC0() {
         if (isConst(_Rt_)) { // if the value to store is constant 
             if (_Rd_ == 13) // if writing to CAUSE
