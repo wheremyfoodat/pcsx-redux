@@ -181,7 +181,7 @@ public:
     const FunctionPointer recSpecial [64] = { // Function pointer table to the compilation functions for special instructions
         &X86DynaRecCPU::recSLL, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 00
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 04
-        &X86DynaRecCPU::recJR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 08
+        &X86DynaRecCPU::recJR, &X86DynaRecCPU::recJALR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 08
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 0c
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 10
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 14
@@ -586,6 +586,19 @@ public:
     void recJAL() {
         markConst (31, recPC + 4); // store the return address in $ra and mark as const
         recJ(); // then do the same stuff we'd do for J
+    }
+
+    void recJALR() {
+        compiling = false; // mark this as the end of the block
+        m_nextIsDelaySlot = true; // next instruction will be in a delay slot, as this is a branch
+        
+        markConst (31, recPC + 4);
+        if (isConst(_Rs_)) // if target addr is constant
+            gen.mov(dword[rbp + PC_OFFSET], registers[_Rs_].val); // store $rs into pc
+        else {
+            allocateReg(_Rs_);
+            gen.mov(dword[rbp + PC_OFFSET], registers[_Rs_].allocatedReg); // store $rs into PC
+        }
     }
 
     void recJR() { 
