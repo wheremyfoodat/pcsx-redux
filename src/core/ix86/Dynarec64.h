@@ -9,10 +9,16 @@
 
 // Wrapper functions (these need to be global)
 
-/// Write a 32-bit value to memory[mem]
+/// Write an 8-bit value to memory[mem]
 void psxMemWrite8Wrapper(uint32_t address, uint8_t value) {
     PCSX::g_emulator->m_psxMem->psxMemWrite8(address, value);
     printf("Wrote %02X to %08X\n", value, address);
+}
+
+/// Write a 16-bit value to memory[mem]
+void psxMemWrite16Wrapper(uint32_t address, uint16_t value) {
+    PCSX::g_emulator->m_psxMem->psxMemWrite8(address, value);
+    printf("Wrote %04X to %08X\n", value, address);
 }
 
 /// Write a 32-bit value to memory[mem]
@@ -78,7 +84,13 @@ public:
     }
     
     /// invalidate block
-    virtual void Clear(uint32_t Addr, uint32_t Size) final { printf("Add page invalidation to x64 JIT\n"); };  
+    virtual void Clear(uint32_t addr, uint32_t size) final { 
+        assert ((addr >> 16) != (m_psxRegs.pc >> 16)); // assert the write is not on the same page as the PC
+        auto block = getBlockPointer (addr); // get address of block
+        *block = 0; // mark block as uncompiled
+
+        printf("Fix page invalidation to x64 JIT\n"); 
+    };  
 
     virtual bool Init() final {
         printf("Initializing x64 JIT...\n");
@@ -147,7 +159,7 @@ public:
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLW,  // 20
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
-        &X86DynaRecCPU::recSB, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
+        &X86DynaRecCPU::recSB, &X86DynaRecCPU::recSH, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 2c
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 30
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 34
@@ -164,9 +176,9 @@ public:
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 14
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
-        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
-        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 28
+        &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSLTU,  // 28
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
         &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 34
@@ -391,6 +403,29 @@ public:
     }
 
     // TODO: Optimize
+    void recSH() { 
+        assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        gen.mov (rax, (uint64_t) &psxMemWrite16Wrapper); // function pointer in rax
+
+        if (isConst(_Rs_))
+            gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+        else {
+            allocateReg(_Rs_);
+            gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
+            gen.add (arg1, _Imm_); // arg1 += imm
+        }
+
+        if (isConst(_Rt_))
+            gen.mov (arg2, registers[_Rt_].val); // value in arg2
+        else {
+            allocateReg(_Rt_);
+            gen.mov (arg2, registers[_Rt_].allocatedReg);
+        }
+
+        gen.call (rax); // call wrapper
+    }
+
+    // TODO: Optimize
     void recSW() { 
         assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
         gen.mov (rax, (uint64_t) &psxMemWrite32Wrapper); // function pointer in rax
@@ -531,6 +566,67 @@ public:
             allocateReg (_Rd_);
             gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
             gen.or_ (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd |= $rt
+        }
+    }
+    
+    void recADDU() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rt_].val + registers[_Rs_].val);
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.add (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd += rt
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.add (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd += rs
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.add (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd += $rt
+        }
+    }
+
+    void recSLTU() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rs_].val < registers[_Rt_].val);
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].val); // compare $rs and $rt
+            gen.setb (al); // if $rs < $rt, set al to 1, else set it to 0
+            gen.movzx (registers[_Rd_].allocatedReg, al); // extend al to $rd
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.cmp (registers[_Rt_].allocatedReg, registers[_Rs_].val); // compare $rs and $rt (operands are swapped because of x64 addr mode stuff)
+            gen.seta (al); // if $rt > $rs, set al to 1, else set it to 0
+            gen.movzx (registers[_Rd_].allocatedReg, al); // extend al to $rd
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);            
+            gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare $rs and $rt
+            gen.setb (al); // if $rs < $rt, set al to 1, else set it to 0
+            gen.movzx (registers[_Rd_].allocatedReg, al); // extend al to $rd
         }
     }
 
