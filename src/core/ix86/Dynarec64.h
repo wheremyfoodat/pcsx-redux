@@ -21,6 +21,13 @@ void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
     printf("Wrote %08X to %08X\n", value, address);
 }
 
+/// Read a 32-bit value from memory[mem]
+uint32_t psxMemRead32Wrapper(uint32_t address) {
+    auto val = PCSX::g_emulator->m_psxMem->psxMemRead32(address);
+    printf("Read %08X from %08X\n", val, address);
+    return val;
+}
+
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
     const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
@@ -138,7 +145,7 @@ public:
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 14
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 18
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 1c
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 20
+        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLW,  // 20
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 24
         &X86DynaRecCPU::recSB, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recSW,  // 28
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 2c
@@ -306,6 +313,7 @@ public:
             case 0: break;
         }
 
+        markConst(0, 0); // some instruction might have marked $zero as non-const, fix this
         allocatedRegisters = 0; // we don't have any allocated regs anymore
     }
 
@@ -408,6 +416,25 @@ public:
         gen.call (rax); // call wrapper
     }
 
+    // TODO: Optimize
+    void recLW() { 
+        if (!_Rt_) return; // don't compile if NOP
+        assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        gen.mov (rax, (uint64_t) &psxMemRead32Wrapper); // function pointer in rax
+        allocateReg(_Rt_); // allocate rt and mark as non const
+
+        if (isConst(_Rs_))
+            gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+        else {
+            allocateReg(_Rs_);
+            gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
+            gen.add (arg1, _Imm_); // arg1 += imm
+        }
+
+        gen.call (rax); // call wrapper
+        gen.mov (registers[_Rt_].allocatedReg, eax); // move result to rt
+    }
+
     void recSLL() {
         if (!_Rd_) return; // don't compile if NOP
         assert(1 == 0); // Implement this later
@@ -474,7 +501,7 @@ public:
 
         // code if branch taken
         gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
-        gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // near branch to end
+        gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
 
         gen.L(branchSkipped); // code if branch skipped
         gen.mov (dword[rbp + PC_OFFSET], recPC); // if the branch was skipped, set PC to recompiler PC
