@@ -24,17 +24,25 @@ void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
 class X86DynaRecCPU : public PCSX::R3000Acpu {
     const int KILOYBTE = 1024; // 1 kilobyte is 1024 bytes
     const int MEGABYTE = 1024 * KILOYBTE; // 1 megabyte is 1024 kilobytes
-    const uint32_t PC_OFFSET = 128 * 4; // the offset of the PC in the registers struct
-    const uint32_t COP0_REGS_OFFSET = 32 * 4; // the offset of the cop0 regs in the register structs
-    const uint32_t CAUSE_OFFSET = COP0_REGS_OFFSET + 13 * 4; // the offset of the CAUSE reg in the register struct
-
+    
+    const uint32_t PC_OFFSET = (uintptr_t) &m_psxRegs.pc - (uintptr_t) &m_psxRegs; // the offset of the PC in the registers struct
+    const uint32_t COP0_REGS_OFFSET = (uintptr_t) &m_psxRegs.CP0 - (uintptr_t) &m_psxRegs; // the offset of the cop0 regs in the register structs
+    const uint32_t CAUSE_OFFSET = (uintptr_t) &m_psxRegs.CP0.r[13] - (uintptr_t) &m_psxRegs; // the offset of the CAUSE reg in the register struct
+    const uint32_t REG_CACHE_OFFSET = (uintptr_t) &m_psxRegs.hostRegisterCache - (uintptr_t) &m_psxRegs; // the offset of the cached host registers in the register struct
+    
     typedef void (X86DynaRecCPU::*FunctionPointer)(); // Define a "Function Pointer" type to make our life easier
     typedef void (*JITCallback)(); // A function pointer to JIT-emitted code
 
 #if defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__)
-    const Reg64 registerPointer = rsi;  // RSI will be used as a pointer to the register array
-    const std::array <Reg32, 7> allocateableRegisters = { r8d, r9d, r10d, r11d, edx, eax, ecx }; // the registers our JIT can allocate. r8-r11 come first, as
-                                                                                           // those don't have any conventional uses in x64 
+    const Reg64 registerPointer = rbp;  // rbp will be used as a pointer to the register array
+
+    /* 
+       The register our JIT can allocate.
+       Starting by the available **non-volatile** regs, since those can be pushed and popped just once per block
+       Then follow the volatile regs, which can sadly be bonked by any C-interop, which is why they're not preferred
+    */
+    const std::array <Reg32, 11> allocateableRegisters = { r12d, r13d, r14d, r15d, edi, esi, ebx, r8d, r9d, r10d, r11d};
+
     const Reg32 arg1 = ecx; // register where first arg is stored
     const Reg32 arg2 = edx; // register where second arg is stored
     const Reg32 arg3 = r8d; // register where third arg is stored
@@ -49,10 +57,9 @@ public:
 // interface methods
     virtual bool isDynarec() final { return true; } // This dynarec is a dynarec, yes
     inline bool Implemented() final { return true; }  // This is implemented in 64-bit mode
-    virtual void Execute() { while (hasToRun()) execute(); }
-    virtual void Reset() { printf("Add resetting to x64 JIT!\n"); }
-    virtual void Clear(uint32_t Addr, uint32_t Size) { printf("Add clearing to x64 JIT\n");  }
-    virtual void Shutdown() { printf("Add shutdown to x64 JIT\n"); }
+    virtual void Execute() final{ while (hasToRun()) execute(); }
+    virtual void Reset() final { printf("Add resetting to x64 JIT!\n"); }
+    virtual void Shutdown() final { printf("Add shutdown to x64 JIT\n"); }
     virtual void SetPGXPMode(uint32_t pgxpMode) final { printf("PGXP stuff in 64-bit JIT\n"); }
    
 // backend methods
@@ -63,7 +70,10 @@ public:
         return registers[reg].state == Constant;
     }
     
-    virtual bool Init() {
+    /// invalidate block
+    virtual void Clear(uint32_t Addr, uint32_t Size) final { printf("Add page invalidation to x64 JIT\n"); };  
+
+    virtual bool Init() final {
         printf("Initializing x64 JIT...\n");
         recRAM = (uintptr_t*) calloc(0x200000, sizeof(uintptr_t*)); // initialize recompiler RAM
         recROM = (uintptr_t*) calloc(0x080000, sizeof(uintptr_t*)); // initialize recompiler ROM
@@ -84,6 +94,7 @@ public:
             validBlockLUT[i + 0xBFC0] = ptr; // KSEG1
         }
         
+        assert((uintptr_t)&m_psxRegs == (uintptr_t)&m_psxRegs.GPR.r[0]);
         return true; 
     }
 
@@ -92,7 +103,7 @@ public:
 
     // A struct that holds a register's info
     struct Register {
-        uint32_t val = 0;    // the register's cached value (TODO: Add initial GP/FP)
+        uint32_t val = 0;    // the register's cached value used in const propagation (TODO: Add initial GP/FP)
         RegState state = Constant;  // is this const or not? (Assume constant, set to 0, on boot)
         Reg32 allocatedReg; // Which host reg has this guest reg been allocated to? The JIT performs register allocation, that means the MIPS reg $t0 might be cached in our x86 "edx" reg, and so on
         bool allocated = false; // Has this register been allocated to a host reg?
@@ -100,9 +111,9 @@ public:
 
     Register registers[32];  // the 32 guest registers
 
-    const std::array <std::string, 7> allocateableRegNames = { "r8", "r9", "r10", "r11", "rdx", "rax", "rcx" }; // x64 register strings for debugging
-    const std::array <std::string, 32> guestRegNames = {"$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4"
-                                                        "$t5", "$t6", "$t7", "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7", "$t8", "$t9", "$k0"
+    const std::array <std::string, 11> allocateableRegNames = { "r12", "r13", "r14", "r15", "edi", "esi", "ebx", "r8", "r9", "r10", "r11" }; // x64 register strings for debugging
+    const std::array <std::string, 32> guestRegNames = {"$zero", "$at", "$v0", "$v1", "$a0", "$a1", "$a2", "$a3", "$t0", "$t1", "$t2", "$t3", "$t4",
+                                                        "$t5", "$t6", "$t7", "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7", "$t8", "$t9", "$k0",
                                                         "$k1", "$gp", "$sp", "$fp", "$ra" };
 
     uintptr_t* validBlockLUT; // shows which blocks are valid
@@ -121,7 +132,7 @@ public:
     const FunctionPointer recBasic [64] = { // Function pointer table to the compilation functions for basic instructions
         &X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recNULL,  // 00
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 04
-        &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recADDI, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
+        &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 08
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
         &X86DynaRecCPU::recCOP0, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
         &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 14
@@ -166,11 +177,26 @@ public:
     /// Allocate a MIPS register to an x64 register
     inline void allocateReg (unsigned regNumber) {
         if (registers[regNumber].allocated) return; // if the register has been allocated, exit
-        printf ("Allocated %s to %s", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
+        printf ("Allocated %s to %s\n", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 
         registers[regNumber].allocated = true; // mark reg as allocated
         registers[regNumber].allocatedReg = allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
         
+        switch (allocatedRegisters) { // if non-volatile, preserve before allocating
+            case 1: gen.mov(r12, qword[rbp + REG_CACHE_OFFSET]); break;
+            case 2: gen.mov(r13, qword[rbp + REG_CACHE_OFFSET + 8]); break;
+            case 3: gen.mov(r14, qword[rbp + REG_CACHE_OFFSET + 16]); break;
+            case 4: gen.mov(r15, qword[rbp + REG_CACHE_OFFSET + 24]); break;
+            case 5: gen.mov(rdi, qword[rbp + REG_CACHE_OFFSET + 32]); break;
+            case 6: gen.mov(rsi, qword[rbp + REG_CACHE_OFFSET + 40]); break;
+            case 7: gen.mov(rbx, qword[rbp + REG_CACHE_OFFSET + 48]); break;
+        }
+
+        if (allocatedRegisters >= 8) {
+            printf("Add handling for allocating volatiles!\n");
+            exit(1);
+        }
+
         if (isConst(regNumber)) {  // if the register is constant, load it from the constant regs and mark it as non-constant
             gen.mov(registers[regNumber].allocatedReg, registers[regNumber].val);
             registers[regNumber].state = Unknown;
@@ -180,7 +206,7 @@ public:
             gen.mov (registers[regNumber].allocatedReg, dword [rbp + regNumber * 4]); // load the cached reg to the host reg
 
         printf ("TODO: 32-bit addressing\n");
-        assert (allocatedRegisters <= 8); // assert that we didn't overallocate
+        assert (allocatedRegisters <= 7); // assert that we didn't allocate a volatile
     }
 
     /// Params: A program counter value
@@ -213,8 +239,7 @@ public:
         
         auto emittedCode = (JITCallback) *blockPointer; // function pointer to the start of the block
         (*emittedCode)(); // call emitted code
-        printf("$at: %08X\n", m_psxRegs.GPR.r[1]);
-        printf("Execution will start from %08X in the next block\n", m_psxRegs.pc);
+        printRegs();
         printf("Add cycles!!\n");
     }
 
@@ -268,6 +293,19 @@ public:
     void flushRegs() { 
         for (auto i = 1; i < 32; i++) 
             flushReg(i); // flush every reg except from $zero since that doesn't need flushing
+        
+        switch (allocatedRegisters) { // restore volatiles, abusing fallthrough between switches (Duff's device pattern)
+            default:
+            case 7: gen.mov(rbx, qword[rbp + REG_CACHE_OFFSET + 48]);
+            case 6: gen.mov(rsi, qword[rbp + REG_CACHE_OFFSET + 40]);
+            case 5: gen.mov(rdi, qword[rbp + REG_CACHE_OFFSET + 32]);
+            case 4: gen.mov(r15, qword[rbp + REG_CACHE_OFFSET + 24]);
+            case 3: gen.mov(r14, qword[rbp + REG_CACHE_OFFSET + 16]);
+            case 2: gen.mov(r13, qword[rbp + REG_CACHE_OFFSET + 8]);
+            case 1: gen.mov(r12, qword[rbp + REG_CACHE_OFFSET]);
+            case 0: break;
+        }
+
         allocatedRegisters = 0; // we don't have any allocated regs anymore
     }
 
@@ -278,11 +316,9 @@ public:
         }
 
         else if (registers[reg].allocated) {
-            gen.mov(dword[rbp + (reg * 4)], registers[reg].allocatedReg); // store allocated regs into memory
-            registers[reg].allocated = false;  // mark them as non-allocated
+            gen.mov(dword[rbp + (reg * 4)], registers[reg].allocatedReg);  // store allocated regs into memory
+            registers[reg].allocated = false;                              // mark them as non-allocated
         }
-
-        registers[reg].allocated = false; // unallocate allocated x64 reg
     }
 
     /// Compile the "special" (opcode == 0) instructions
@@ -321,7 +357,6 @@ public:
         else {
             allocateReg (_Rs_);
             allocateReg (_Rt_);
-            registers[_Rt_].state = Unknown; // mark Rt as unknown
             gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov rt, rs
             gen.or_ (registers[_Rt_].allocatedReg, _ImmU_); // or $rt, imm
         }
@@ -352,7 +387,7 @@ public:
 
     // TODO: Optimize
     void recSW() { 
-        assert (4 > allocatedRegisters); // assert that we're not trampling any allocated regs
+        assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
         gen.mov (rax, (uint64_t) &psxMemWrite32Wrapper); // function pointer in rax
 
         if (isConst(_Rs_))
@@ -378,15 +413,18 @@ public:
         assert(1 == 0); // Implement this later
     }
 
-    void recADDI() { 
+    // This is temporarily used for ADDI too, since we don't account for overflows yet. TODO: Fix
+    void recADDIU() { 
         if (!_Rt_) return; // don't compile if NOP
         if (isConst(_Rs_)) // If Rs is constant, mark Rt as constant too
             markConst(_Rt_, registers[_Rs_].val + _Imm_);
 
         else {
-            printf("ADDI %s, %s, %08X", guestRegNames[_Rt_].c_str(), guestRegNames[_Rs_].c_str(), _Imm_);
-            registers[_Rt_].state = Unknown;
-            assert(1 == 0); // Implement this later
+            printf("ADDI(U) %s, %s, %08X", guestRegNames[_Rt_].c_str(), guestRegNames[_Rs_].c_str(), _Imm_);
+            allocateReg(_Rt_);
+            allocateReg(_Rs_);
+            gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov $rt, $rs
+            gen.add (registers[_Rt_].allocatedReg, _Imm_); // add $rt, #signed immediate
         }
     }
 
@@ -400,12 +438,12 @@ public:
         printf("[JIT64] End of block. Jumped to %08X\n", newPC);
     }
 
+    // TODO: Fix how missing the branch is handled
     void recBNE() {
         m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
         compiling = false; // stop compiling
-
         const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
-        if (target == recPC + 4) return; // If target == recPC + 4, we'll jump to the same address whether or not we take the branch, so don't compile it
+
         if (isConst(_Rs_) && isConst(_Rt_)) {  // if both operands are constant
             if (registers[_Rs_].val != registers[_Rt_].val) {  // and they're not equal
                 gen.mov (dword[rbp + PC_OFFSET], target); // store new PC
@@ -413,28 +451,34 @@ public:
             }
         }
 
-        Xbyak::Label branchSkipped; // label to jump to if the branch is skipped
+        Xbyak::Label branchSkipped, exit;
+
         if (isConst(_Rs_)) { // if only Rs is const
             allocateReg(_Rt_);
             gen.cmp (registers[_Rt_].allocatedReg, registers[_Rs_].val); // compare rs and rt
-            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+            gen.jnz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
         }
 
         else if (isConst(_Rt_)) { // else if only Rt is const
             allocateReg(_Rs_);
             gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].val); // compare rs and rt
-            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+            gen.jnz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
         }
 
         else { // nothing is constant
             allocateReg(_Rs_);
             allocateReg(_Rt_);
             gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare rs and rt again
-            gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+            gen.jnz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
         }
 
-        gen.mov (dword[rbp + PC_OFFSET], target); // if the branch was not skipped, set PC to target
-        gen.L(branchSkipped); // set branch skipped label here
+        // code if branch taken
+        gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
+        gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // near branch to end
+
+        gen.L(branchSkipped); // code if branch skipped
+        gen.mov (dword[rbp + PC_OFFSET], recPC); // if the branch was skipped, set PC to recompiler PC
+        gen.L(exit); // exit point
     }
 
     void recOR() {
@@ -443,18 +487,18 @@ public:
         if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
             markConst (_Rd_, registers[_Rt_].val | registers[_Rs_].val);
         
-        else if (isConst(_Rs_)) { // Rs is constant
-            allocateReg (_Rt_);
-            allocateReg (_Rd_);
-            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
-            gen.or_ (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd |= rs
-        }
-
         else if (isConst(_Rt_)) { // Rt is constant
             allocateReg (_Rs_);
             allocateReg (_Rd_);
             gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
             gen.or_ (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd |= rt
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.or_ (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd |= rs
         }
 
         else { // nothing is constant
@@ -488,6 +532,8 @@ public:
             if (_Rd_ == 13) // If rd == CAUSE, apply mask
                 gen.and_ (dword [rbp + CAUSE_OFFSET], ~0xFC00); 
         }
+
+        if (_Rd_ == 12 || _Rd_ == 13) printf("Check out the testSWInt shit from the original JIT\n");
     }
 
     /// dump the JIT command buffer, for stuff like viewing it in a disassembler
@@ -496,5 +542,12 @@ public:
         std::ofstream file ("output.bin", std::ios::binary);
         file.write ((const char*) blocks, index);
         printf ("Dumped %d bytes\n", index);
+    }
+
+    /// Call at the end of a block to print the GPR state
+    void printRegs() { 
+        for (auto i = 0; i < 32; i++) 
+            printf("%s: %08X\n", guestRegNames[i].c_str(), m_psxRegs.GPR.r[i]);
+        printf("PC: %08X\n", m_psxRegs.pc);
     }
 };  

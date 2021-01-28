@@ -174,6 +174,7 @@ struct psxRegisters {
     } intCycle[32];
     uint8_t ICache_Addr[0x1000];
     uint8_t ICache_Code[0x1000];
+    uint64_t hostRegisterCache [8]; // x64 non-volatile regs are cached here inside the JITs
     bool ICache_valid;
 };
 
