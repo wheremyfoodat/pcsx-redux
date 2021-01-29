@@ -160,7 +160,7 @@ enum {
 };
 
 struct psxRegisters {
-    psxGPRRegs GPR;  /* General Purpose Registers, 32 * 4 bytes */
+    psxGPRRegs GPR;  /* General Purpose Registers, 34 * 4 bytes */
     psxCP0Regs CP0;  /* Coprocessor0 Registers, 32 * 4 bytes */
     psxCP2Data CP2D; /* Cop2 data registers, 32 * 4 bytes */
     psxCP2Ctrl CP2C; /* Cop2 control registers, 32 * 4 bytes */
