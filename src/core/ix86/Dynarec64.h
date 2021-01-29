@@ -276,6 +276,7 @@ public:
 	void execute() {
         assert (m_psxRegs.pc != 0x80030000); // we can hijack the boo!
         assert (m_psxRegs.pc != 0);
+        assert (isPcValid(m_psxRegs.pc));
 
 		auto blockPointer = getBlockPointer(m_psxRegs.pc); // pointer to the current x64 block
 		if ((uintptr_t*) *blockPointer == nullptr) { // if the block hasn't been compiled
@@ -613,14 +614,14 @@ public:
 		compiling = false; // mark this as the end of the block
 		m_nextIsDelaySlot = true; // next instruction will be in a delay slot, as this is a branch
 		
-		markConst (31, recPC + 4); // store the return address in $ra and mark const. Note: The return address is 8 bytes after the JAL
+		markConst (_Rd_, recPC + 4); // store the return address in $rd and mark const. Note: The return address is 8 bytes after the JAL
 		if (isConst(_Rs_)) // if target addr is constant
 			gen.mov(dword[rbp + PC_OFFSET], registers[_Rs_].val & ~3); // store $rs into pc and force align address
 		else {
 			allocateReg(_Rs_);
             gen.mov (eax, registers[_Rs_].allocatedReg); // address in eax
             gen.and_ (eax, ~3); // force align address
-			gen.mov(dword[rbp + PC_OFFSET], registers[_Rs_].allocatedReg); // store eax into PC
+			gen.mov(dword[rbp + PC_OFFSET], eax); // store eax into PC
 		}
 	}
 
@@ -969,17 +970,17 @@ public:
 
 	void recMFC0() {
 		if (!_Rt_) return; // don't compile if NOP
-		allocateReg (_Rd_); 
-		gen.mov (registers[_Rd_].allocatedReg, dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4]); // load cop0 reg into 
+		allocateReg (_Rt_); 
+		gen.mov (registers[_Rt_].allocatedReg, dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4]); // load cop0 reg into 
 	}
 
 	// Todo: Handle unwriteable regs
 	void recMTC0() {
 		if (isConst(_Rt_)) { // if the value to store is constant 
 			if (_Rd_ == 13) // if writing to CAUSE
-				gen.mov (dword [rbp + CAUSE_OFFSET], registers[_Rd_].val & ~0xFC00); // apply the proper mask to the reg and store
+				gen.mov (dword [rbp + CAUSE_OFFSET], registers[_Rt_].val & ~0xFC00); // apply the proper mask to the reg and store
 			else // if not writing to CAUSE
-				gen.mov (dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4], registers[_Rd_].val); // store reg
+				gen.mov (dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4], registers[_Rt_].val); // store reg
 		}
 
 		else { // if the value to store is not constant
