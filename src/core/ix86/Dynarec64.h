@@ -432,11 +432,11 @@ public:
 		gen.mov (rax, (uint64_t) &psxMemWrite8Wrapper); // function pointer in rax
 
 		if (isConst(_Rs_))
-			gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+			gen.mov (arg1, registers[_Rs_].val + (uint32_t) _Imm_); // address in arg1
 		else {
 			allocateReg(_Rs_);
 			gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
-			gen.add (arg1, _Imm_); // arg1 += imm
+			gen.add (arg1, (uint32_t) _Imm_); // arg1 += imm
 		}
 
 		if (isConst(_Rt_))
@@ -455,11 +455,11 @@ public:
 		gen.mov (rax, (uint64_t) &psxMemWrite16Wrapper); // function pointer in rax
 
 		if (isConst(_Rs_))
-			gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+			gen.mov (arg1, registers[_Rs_].val + (uint32_t) _Imm_); // address in arg1
 		else {
 			allocateReg(_Rs_);
 			gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
-			gen.add (arg1, _Imm_); // arg1 += imm
+			gen.add (arg1, (uint32_t) _Imm_); // arg1 += imm
 		}
 
 		if (isConst(_Rt_))
@@ -478,11 +478,11 @@ public:
 		gen.mov (rax, (uint64_t) &psxMemWrite32Wrapper); // function pointer in rax
 
 		if (isConst(_Rs_))
-			gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+			gen.mov (arg1, registers[_Rs_].val + (uint32_t) _Imm_); // address in arg1
 		else {
 			allocateReg(_Rs_);
 			gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
-			gen.add (arg1, _Imm_); // arg1 += imm
+			gen.add (arg1, (uint32_t) _Imm_); // arg1 += imm
 		}
 
 		if (isConst(_Rt_))
@@ -503,11 +503,11 @@ public:
 		allocateReg(_Rt_); // allocate rt and mark as non const
 
 		if (isConst(_Rs_))
-			gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+			gen.mov (arg1, registers[_Rs_].val + (uint32_t) _Imm_); // address in arg1
 		else {
 			allocateReg(_Rs_);
 			gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
-			gen.add (arg1, _Imm_); // arg1 += imm
+			gen.add (arg1, (uint32_t) _Imm_); // arg1 += imm
 		}
 
 		gen.call (rax); // call wrapper
@@ -522,11 +522,11 @@ public:
 		allocateReg(_Rt_); // allocate rt and mark as non const
 
 		if (isConst(_Rs_))
-			gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+			gen.mov (arg1, registers[_Rs_].val + (uint32_t) _Imm_); // address in arg1
 		else {
 			allocateReg(_Rs_);
 			gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
-			gen.add (arg1, _Imm_); // arg1 += imm
+			gen.add (arg1, (uint32_t) _Imm_); // arg1 += imm
 		}
 
 		gen.call (rax); // call wrapper
@@ -541,11 +541,11 @@ public:
 		allocateReg(_Rt_); // allocate rt and mark as non const
 
 		if (isConst(_Rs_))
-			gen.mov (arg1, registers[_Rs_].val + _Imm_); // address in arg1
+			gen.mov (arg1, registers[_Rs_].val + (uint32_t) _Imm_); // address in arg1
 		else {
 			allocateReg(_Rs_);
 			gen.mov (arg1, registers[_Rs_].allocatedReg); // arg1 = $rs
-			gen.add (arg1, _Imm_); // arg1 += imm
+			gen.add (arg1, (uint32_t) _Imm_); // arg1 += imm
 		}
 
 		gen.call (rax); // call wrapper
@@ -580,18 +580,100 @@ public:
 		}
 	}
 
+    // Shift right logical by a variable amount instruction
+    // As you might have noticed the MIPS spec specifies that the shift amount should be masked by 31
+    // However we don't do that here because
+    // 1) speed
+    // 2) It's automatically, implicitly, done in x86 when shifting a 32-bit reg
+    void recSRLV() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rt_].val >> registers[_Rs_].val);
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd = $rt
+            gen.shr (registers[_Rd_].allocatedReg, registers[_Rs_].allocated); // $rd >>= rs
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.shr (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd >>= rs
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.shr (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd >>= $rs
+        }
+    }
+
+    void recSRA() {
+        if (!_Rd_) return; // don't compile if NOP
+        
+        if (isConst(_Rt_)) // if $rt is const
+            markConst (_Rd_, (int32_t) registers[_Rt_].val >> _Sa_); // $rd = $rs >> sa (arithmetic)
+    
+        else { // nothing is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.sar (registers[_Rd_].allocatedReg, _Sa_); // $rd >>= shift amount (arithmetic)
+        }
+    }
+
+    // Shift right arithmetic by a variable amount instruction
+    // As you might have noticed the MIPS spec specifies that the shift amount should be masked by 31
+    // However we don't do that here because
+    // 1) speed
+    // 2) It's automatically, implicitly, done in x86 when shifting a 32-bit reg
+    void recSRLV() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, (int32_t) registers[_Rt_].val >> registers[_Rs_].val); // the cast to int32_t makes the compiler emit an arithmetic shift
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd = $rt
+            gen.sar (registers[_Rd_].allocatedReg, registers[_Rs_].allocated); // $rd >>= rs (arithmetic)
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.sar (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd >>= rs (arithmetic)
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.sar (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd >>= $rs (arithmetic)
+        }
+    }
+
 	// This is temporarily used for ADDI too, since we don't account for overflows yet. TODO: Fix
 	void recADDIU() { 
 		if (!_Rt_) return; // don't compile if NOP
 		if (isConst(_Rs_)) // If Rs is constant, mark Rt as constant too
-			markConst(_Rt_, registers[_Rs_].val + _Imm_);
+			markConst(_Rt_, registers[_Rs_].val + (uint32_t) _Imm_);
 
 		else {
-			printf("ADDI(U) %s, %s, %08X", guestRegNames[_Rt_].c_str(), guestRegNames[_Rs_].c_str(), _Imm_);
+			printf("ADDI(U) %s, %s, %08X", guestRegNames[_Rt_].c_str(), guestRegNames[_Rs_].c_str(), (uint32_t) _Imm_);
 			allocateReg(_Rt_);
 			allocateReg(_Rs_);
 			gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // mov $rt, $rs
-			gen.add (registers[_Rt_].allocatedReg, _Imm_); // add $rt, #signed immediate
+			gen.add (registers[_Rt_].allocatedReg,(uint32_t) _Imm_); // add $rt, #signed immediate
 		}
 	}
 
@@ -613,7 +695,9 @@ public:
 	void recJALR() {
 		compiling = false; // mark this as the end of the block
 		m_nextIsDelaySlot = true; // next instruction will be in a delay slot, as this is a branch
-		
+        printf("jalr %s, %s", guestRegNames[_Rd_].c_str(), guestRegNames[_Rs_].c_str());
+        printRegs();
+
 		markConst (_Rd_, recPC + 4); // store the return address in $rd and mark const. Note: The return address is 8 bytes after the JAL
 		if (isConst(_Rs_)) // if target addr is constant
 			gen.mov(dword[rbp + PC_OFFSET], registers[_Rs_].val & ~3); // store $rs into pc and force align address
@@ -638,7 +722,7 @@ public:
 
 	template <bool link>
 	void recBLTZ() {
-		const uint32_t target = recPC + _Imm_ * 4; // the addr we'll jump to if the branch is taken
+		const uint32_t target = recPC + (uint32_t) _Imm_ * 4; // the addr we'll jump to if the branch is taken
 		printf ("BLTZ at PC: %08X\nIf the branch is taken, this will jump to %08X\nIf it's skipped, it'll execute 1 instruction and continue from %08X\n", recPC-4, target, recPC+4);
 		exit (1);
 
@@ -686,7 +770,7 @@ public:
 	void recBNE() {
 		m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
 		compiling = false; // stop compiling
-		const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+		const uint32_t target = recPC + (uint32_t) _Imm_ * 4; // the address we'll jump to if the branch is taken
 		
 		if (isConst(_Rs_) && isConst(_Rt_)) {  // if both operands are constant
 			if (registers[_Rs_].val != registers[_Rt_].val)  // and they're not equal
@@ -729,7 +813,7 @@ public:
 	void recBEQ() {
 		m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
 		compiling = false; // stop compiling
-		const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+		const uint32_t target = recPC + (uint32_t) _Imm_ * 4; // the address we'll jump to if the branch is taken
 
 		if (isConst(_Rs_) && isConst(_Rt_)) {  // if both operands are constant
 			if (registers[_Rs_].val != registers[_Rt_].val)  // and they're not equal
@@ -772,7 +856,7 @@ public:
 	void recBGTZ() {
 		m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
 		compiling = false; // stop compiling
-		const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+		const uint32_t target = recPC + (uint32_t) _Imm_ * 4; // the address we'll jump to if the branch is taken
 
 		if (isConst(_Rs_)) {// if $rs is constant 
 			if ((int32_t) registers[_Rs_].val > 0) // if operand is greater than zero
@@ -799,7 +883,7 @@ public:
 	void recBLEZ() {
 		m_nextIsDelaySlot = true; // the instruction after this will be in a delay slot, since this is a branch
 		compiling = false; // stop compiling
-		const uint32_t target = recPC + _Imm_ * 4; // the address we'll jump to if the branch is taken
+		const uint32_t target = recPC + (uint32_t) _Imm_ * 4; // the address we'll jump to if the branch is taken
 
 		if (isConst(_Rs_)) {// if $rs is constant 
 			if ((int32_t) registers[_Rs_].val <= 0) // if operand is greater than zero
@@ -952,7 +1036,7 @@ public:
 		else { // nothing is constant
 			allocateReg (_Rs_);
 			allocateReg (_Rt_);     
-			gen.cmp (registers[_Rs_].allocatedReg, _Imm_); // compare $rs and immediate
+			gen.cmp (registers[_Rs_].allocatedReg, (uint32_t) _Imm_); // compare $rs and immediate
 			gen.setl (al); // if $rs < imm (signed), set al to 1, else set it to 0
 			gen.movzx (registers[_Rt_].allocatedReg, al); // extend al to $rt
 		}
