@@ -191,7 +191,7 @@ public:
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
 		&X86DynaRecCPU::recADDU, &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
-		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
+		&X86DynaRecCPU::recAND, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSLTU,  // 28
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
@@ -564,6 +564,42 @@ public:
 		}
 	}
 
+    // Shift left logical by a variable amount instruction
+    // As you might have noticed the MIPS spec specifies that the shift amount should be masked by 31
+    // However we don't do that here because
+    // 1) speed
+    // 2) It's automatically, implicitly, done in x86 when shifting a 32-bit reg
+    void recSLLV() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rt_].val << registers[_Rs_].val);
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd = $rt
+            gen.mov (ecx, registers[_Rs_].allocatedReg); // shift amount in ecx (only register you can shift by in x86)
+            gen.shl (registers[_Rd_].allocatedReg, cl); // $rd <<= $rs
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.shl (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd <<= $rs
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.mov (ecx, registers[_Rs_].allocatedReg); // shift amount in ecx (only register you can shift by in x86)
+            gen.shl (registers[_Rd_].allocatedReg, cl); // $rd <<= $rs
+        }
+    }
+
 	void recSRL() {
 		if (!_Rd_) return; // don't compile if NOP
 		
@@ -738,19 +774,14 @@ public:
 			return; // dip
 		}
 
-		Xbyak::Label branchSkipped, exit;
+        gen.mov (eax, target); // jump address will go in eax
+        gen.mov (edx, recPC + 4), // jump address if jump not taken
+
 		allocateReg (_Rs_);
+
 		gen.test (registers[_Rs_].allocatedReg, registers[_Rs_].allocatedReg); // update flags based on $rs
-		gen.jns (branchSkipped, CodeGenerator::T_NEAR); // if sign bit is not set then $rs >= 0, so skip jump
-
-		// code if branch is taken
-		gen.mov (dword [rbp + PC_OFFSET], target); // jump
-		gen.jmp (exit, CodeGenerator::T_NEAR); // exit
-
-		// code if branch is not taken
-		gen.L (branchSkipped);
-		gen.mov (dword [rbp + PC_OFFSET], recPC + 4);
-		gen.L (exit);
+		gen.cmovns (eax, edx); // if sign bit is not set then $rs >= 0, so skip jump
+		gen.mov (dword [rbp + PC_OFFSET], eax); // store new PC
 	}
 
 	void recJR() { 
@@ -781,34 +812,27 @@ public:
 			return; // dip
 		}
 
-		Xbyak::Label branchSkipped, exit;
+		gen.mov (eax, target); // jump address will go in eax
+        gen.mov (edx, recPC + 4); // jump address if jump not taken
 
 		if (isConst(_Rs_)) { // if only Rs is const
 			allocateReg(_Rt_);
 			gen.cmp (registers[_Rt_].allocatedReg, registers[_Rs_].val); // compare rs and rt
-			gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
 		}
 
 		else if (isConst(_Rt_)) { // else if only Rt is const
 			allocateReg(_Rs_);
 			gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].val); // compare rs and rt
-			gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
 		}
 
 		else { // nothing is constant
 			allocateReg(_Rs_);
 			allocateReg(_Rt_);
 			gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare rs and rt again
-			gen.jz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
 		}
 
-		// code if branch taken
-		gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
-		gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
-
-		gen.L(branchSkipped); // code if branch skipped
-		gen.mov (dword[rbp + PC_OFFSET], recPC + 4); // if the branch was skipped, set PC to recompiler PC
-		gen.L(exit); // exit point
+		gen.cmovz (eax, edx); // if z => $rt == $rs so skip branch
+		gen.mov (dword[rbp + PC_OFFSET], eax); // store new PC
 	}
 
 	void recBEQ() {
@@ -824,34 +848,27 @@ public:
 			return; // dip
 		}
 
-		Xbyak::Label branchSkipped, exit;
+        gen.mov (eax, target); // jump address will go in eax
+        gen.mov (edx, recPC + 4); // jump address if jump not taken
 
 		if (isConst(_Rs_)) { // if only Rs is const
 			allocateReg(_Rt_);
 			gen.cmp (registers[_Rt_].allocatedReg, registers[_Rs_].val); // compare rs and rt
-			gen.jnz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
 		}
 
 		else if (isConst(_Rt_)) { // else if only Rt is const
 			allocateReg(_Rs_);
 			gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].val); // compare rs and rt
-			gen.jnz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
 		}
 
 		else { // nothing is constant
 			allocateReg(_Rs_);
 			allocateReg(_Rt_);
-			gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare rs and rt again
-			gen.jnz (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if equal, skip branch
+			gen.cmp (registers[_Rs_].allocatedReg, registers[_Rt_].allocatedReg); // compare rs and rt 
 		}
 
-		// code if branch taken
-		gen.mov (dword [rbp + PC_OFFSET], target); // move new PC to pc var
-		gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
-
-		gen.L(branchSkipped); // code if branch skipped
-		gen.mov (dword[rbp + PC_OFFSET], recPC + 4); // if the branch was skipped, set PC to recompiler PC
-		gen.L(exit); // exit point
+        gen.cmovnz (eax, edx); // if nz => $rs != $rt, so skip the branch
+        gen.mov (dword[rbp + PC_OFFSET], eax); // store new PC
 	}
 
 	void recBGTZ() {
@@ -867,18 +884,13 @@ public:
 			return; // dip
 		}
 
-		Xbyak::Label branchSkipped, exit;
 		allocateReg (_Rs_);
-		gen.test (registers[_Rs_].allocatedReg, registers[_Rs_].allocatedReg); // update flags based on $rs
-		gen.jle (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if le => $rs <= 0, so skip the branch
+        gen.mov (eax, target); // jump address will go in eax
+        gen.mov (edx, recPC + 4), // jump address if jump not taken
+        gen.test (registers[_Rs_].allocatedReg, registers[_Rs_].allocatedReg); // update flags based on $rs
+        gen.cmovle (eax, edx); // if le => $rs <= 0, so skip the branch
 
-		// code if branch taken
-		gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
-		gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
-
-		gen.L(branchSkipped); // code if branch skipped
-		gen.mov (dword [rbp + PC_OFFSET], recPC + 4); // if the branch was skipped, set PC to recompiler PC
-		gen.L(exit); // exit point
+        gen.mov (dword[rbp + PC_OFFSET], eax); // store new PC
 	}
 
 	void recBLEZ() {
@@ -894,18 +906,14 @@ public:
 			return; // dip
 		}
 
-		Xbyak::Label branchSkipped, exit;
-		allocateReg (_Rs_);
+        allocateReg (_Rs_);
+
+        gen.mov (eax, target); // jump address will go in eax
+        gen.mov (edx, recPC + 4), // jump address if jump not taken
 		gen.test (registers[_Rs_].allocatedReg, registers[_Rs_].allocatedReg); // update flags based on $rs
-		gen.jg (branchSkipped, Xbyak::CodeGenerator::T_NEAR); // if g => $rs > 0, so skip the branch
+		gen.cmovg (eax, edx); // if g => $rs > 0, so skip the branch
 
-		// code if branch taken
-		gen.mov (dword[rbp + PC_OFFSET], target); // move new PC to pc var
-		gen.jmp(exit, Xbyak::CodeGenerator::T_NEAR); // skip to the end
-
-		gen.L(branchSkipped); // code if branch skipped
-		gen.mov (dword[rbp + PC_OFFSET], recPC + 4); // if the branch was skipped, set PC to recompiler PC
-		gen.L(exit); // exit point
+		gen.mov (dword[rbp + PC_OFFSET], eax); // store new PC
 	}
 
 	void recOR() {
