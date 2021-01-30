@@ -191,7 +191,7 @@ public:
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
 		&X86DynaRecCPU::recADDU, &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
-		&X86DynaRecCPU::recAND, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
+		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSLTU,  // 28
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
@@ -390,6 +390,7 @@ public:
 		printf("Compiling unknown special instruction %08X\n", m_psxRegs.code);
 		printf("Subfunction: %02X\n", m_psxRegs.code & 0x3F);
 		printf("PC: %08X\n", recPC);
+		printRegs();
 		exit(1);
 	}
 	
@@ -497,7 +498,6 @@ public:
 
 	// TODO: Optimize
 	void recLB() { 
-		if (!_Rt_) return; // don't compile if NOP
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
 		gen.mov (rax, (uint64_t) &psxMemRead8Wrapper); // function pointer in rax
 		allocateReg(_Rt_); // allocate rt and mark as non const
@@ -516,7 +516,6 @@ public:
 
 	// TODO: Optimize
 	void recLBU() { // Literally LB with zero extension
-		if (!_Rt_) return; // don't compile if NOP
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
 		gen.mov (rax, (uint64_t) &psxMemRead8Wrapper); // function pointer in rax
 		allocateReg(_Rt_); // allocate rt and mark as non const
@@ -535,7 +534,6 @@ public:
 
 	// TODO: Optimize
 	void recLW() { 
-		if (!_Rt_) return; // don't compile if NOP
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
 		gen.mov (rax, (uint64_t) &psxMemRead32Wrapper); // function pointer in rax
 		allocateReg(_Rt_); // allocate rt and mark as non const
@@ -595,7 +593,8 @@ public:
             allocateReg (_Rs_);
             allocateReg (_Rd_);
             gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd = $rt
-            gen.shr (registers[_Rd_].allocatedReg, registers[_Rs_].allocated); // $rd >>= rs
+            gen.mov (ecx, registers[_Rs_].allocatedReg); // shift amount in ecx (only register you can shift by in x86)
+            gen.shr (registers[_Rd_].allocatedReg, cl); // $rd >>= rs
         }
 
         else if (isConst(_Rs_)) { // Rs is constant
@@ -609,8 +608,8 @@ public:
             allocateReg (_Rs_);
             allocateReg (_Rt_);
             allocateReg (_Rd_);
-            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
-            gen.shr (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd >>= $rs
+            gen.mov (ecx, registers[_Rs_].allocatedReg); // shift amount in ecx (only register you can shift by in x86)
+            gen.shr (registers[_Rd_].allocatedReg, cl); // $rd >>= rs
         }
     }
 
@@ -633,7 +632,7 @@ public:
     // However we don't do that here because
     // 1) speed
     // 2) It's automatically, implicitly, done in x86 when shifting a 32-bit reg
-    void recSRLV() {
+    void recSRAV() {
         if (!_Rd_) return; // do not compile if NOP
 
         if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
@@ -643,7 +642,8 @@ public:
             allocateReg (_Rs_);
             allocateReg (_Rd_);
             gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd = $rt
-            gen.sar (registers[_Rd_].allocatedReg, registers[_Rs_].allocated); // $rd >>= rs (arithmetic)
+            gen.mov (ecx, registers[_Rs_].allocatedReg); // shift amount in ecx (only register you can shift by in x86)
+            gen.sar (registers[_Rd_].allocatedReg, cl); // $rd >>= rs (arithmetic)
         }
 
         else if (isConst(_Rs_)) { // Rs is constant
@@ -658,7 +658,8 @@ public:
             allocateReg (_Rt_);
             allocateReg (_Rd_);
             gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
-            gen.sar (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd >>= $rs (arithmetic)
+            gen.mov (ecx, registers[_Rs_].allocatedReg); // shift amount in ecx (only register you can shift by in x86)
+            gen.sar (registers[_Rd_].allocatedReg, cl); // $rd >>= $rs (arithmetic)
         }
     }
 
