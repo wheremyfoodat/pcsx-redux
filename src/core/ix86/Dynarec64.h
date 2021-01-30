@@ -427,6 +427,19 @@ public:
 		}
 	}
 
+    void recXORI() {
+        if (!_Rt_) return; // don't compile if NOP
+
+        if (isConst(_Rs_)) // if Rs is const, mark Rt as const too
+            markConst (_Rt_, registers[_Rs_].val ^ _ImmU_);
+        else {
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            gen.mov (registers[_Rt_].allocatedReg, registers[_Rs_].allocatedReg); // $rt = $rs
+            gen.xor_ (registers[_Rt_].allocatedReg, _ImmU_); // $rt ^= imm
+        }
+    }
+
 	// TODO: Optimize
 	void recSB() { 
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
@@ -529,7 +542,7 @@ public:
 		}
 
 		gen.call (rax); // call wrapper
-		gen.movzx (registers[_Rt_].allocatedReg, al); // move sign extended result to rt
+		gen.movzx (registers[_Rt_].allocatedReg, al); // move zero extended result to rt
 	}
 
 	// TODO: Optimize
@@ -973,6 +986,35 @@ public:
 			gen.and_ (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd &= $rt
 		}
 	}
+
+    void recXOR() {
+        if (!_Rd_) return; // do not compile if NOP
+
+        if (isConst(_Rs_) && isConst(_Rt_)) // if both Rs and Rt are const
+            markConst (_Rd_, registers[_Rt_].val ^ registers[_Rs_].val);
+        
+        else if (isConst(_Rt_)) { // Rt is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.xor_ (registers[_Rd_].allocatedReg, registers[_Rt_].val); // $rd ^= rt
+        }
+
+        else if (isConst(_Rs_)) { // Rs is constant
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd = $rt
+            gen.xor_ (registers[_Rd_].allocatedReg, registers[_Rs_].val); // $rd ^= rs
+        }
+
+        else { // nothing is constant
+            allocateReg (_Rs_);
+            allocateReg (_Rt_);
+            allocateReg (_Rd_);
+            gen.mov (registers[_Rd_].allocatedReg, registers[_Rs_].allocatedReg); // $rd = $rs
+            gen.xor_ (registers[_Rd_].allocatedReg, registers[_Rt_].allocatedReg); // $rd ^= $rt
+        }
+    }
 	
 	// Note: This is currently used for both ADDU and ADD
 	// TODO: Split ADD and ADDU, implement overflow exceptions
@@ -1064,7 +1106,7 @@ public:
 	void recMFC0() {
 		if (!_Rt_) return; // don't compile if NOP
 		allocateReg (_Rt_); 
-		gen.mov (registers[_Rt_].allocatedReg, dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4]); // load cop0 reg into 
+		gen.mov (registers[_Rt_].allocatedReg, dword [rbp + COP0_REGS_OFFSET + _Rd_ * 4]); // load cop0 reg into $rt
 	}
 
 	// Todo: Handle unwriteable regs
