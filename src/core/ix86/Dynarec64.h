@@ -24,7 +24,7 @@ void psxMemWrite16Wrapper(uint32_t address, uint16_t value) {
 /// Write a 32-bit value to memory[mem]
 void psxMemWrite32Wrapper(uint32_t address, uint32_t value) {
 	PCSX::g_emulator->m_psxMem->psxMemWrite32(address, value);
-	//printf("Wrote %08X to %08X\n", value, address);
+    printf ("Wrote %08X to %08X\n", value, address);
 }
 
 /// Read an 8-bit value from memory[mem]
@@ -166,7 +166,7 @@ public:
 		&X86DynaRecCPU::recompileSpecial, &X86DynaRecCPU::recREGIMM, &X86DynaRecCPU::recJ, &X86DynaRecCPU::recJAL,  // 00
 		&X86DynaRecCPU::recBEQ, &X86DynaRecCPU::recBNE, &X86DynaRecCPU::recBLEZ, &X86DynaRecCPU::recBGTZ,  // 04
 		&X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recADDIU, &X86DynaRecCPU::recSLTI, &X86DynaRecCPU::recNULL,  // 08
-		&X86DynaRecCPU::recANDI, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recLUI,  // 0c
+		&X86DynaRecCPU::recANDI, &X86DynaRecCPU::recORI,  &X86DynaRecCPU::recXORI, &X86DynaRecCPU::recLUI,  // 0c
 		&X86DynaRecCPU::recCOP0, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 10
 		&X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 14
 		&X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL, &X86DynaRecCPU::recNULL,  // 18
@@ -183,7 +183,7 @@ public:
 
 	const FunctionPointer recSpecial [64] = { // Function pointer table to the compilation functions for special instructions
 		&X86DynaRecCPU::recSLL, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSRL, &X86DynaRecCPU::recNULLSpecial,  // 00
-		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 04
+		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSRAV,  // 04
 		&X86DynaRecCPU::recJR, &X86DynaRecCPU::recJALR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 08
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 0c
 		&X86DynaRecCPU::recMFHI, &X86DynaRecCPU::recMTHI, &X86DynaRecCPU::recMFLO, &X86DynaRecCPU::recMTLO,  // 10
@@ -191,7 +191,7 @@ public:
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 18
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 1c
 		&X86DynaRecCPU::recADDU, &X86DynaRecCPU::recADDU, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 20
-		&X86DynaRecCPU::recAND, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 24
+		&X86DynaRecCPU::recAND, &X86DynaRecCPU::recOR, &X86DynaRecCPU::recXOR, &X86DynaRecCPU::recNULLSpecial,  // 24
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recSLTU,  // 28
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 2c
 		&X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial, &X86DynaRecCPU::recNULLSpecial,  // 30
@@ -210,7 +210,6 @@ public:
 	/// Allocate a MIPS register to an x64 register
 	inline void allocateReg (unsigned regNumber) {
 		if (registers[regNumber].allocated) return; // if the register has been allocated, exit
-		printf ("Allocated %s to %s\n", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 		
 		// Todo: Add support for allocating volatiles, as flushing is *really* slow
 		if (allocatedRegisters >= 7) {
@@ -236,6 +235,7 @@ public:
 		}
 
         registers[regNumber].allocated = true; // mark reg as allocated
+		printf ("Allocated %s to %s\n", guestRegNames[allocatedRegisters].c_str(), allocateableRegNames[allocatedRegisters].c_str());
 		registers[regNumber].allocatedReg = allocateableRegisters[allocatedRegisters++]; // allocate a host reg, increment the amount of regs that's been alloc'd
 		
 		switch (allocatedRegisters) { // if non-volatile, preserve before allocating
@@ -274,19 +274,32 @@ public:
 
 	/// Run the JIT
 	void execute() {
-        assert (m_psxRegs.pc != 0x80030000); // we can hijack the boo!
+        /*
+        if (!m_shellStarted) { // skip BIOS hack (will break with games that need the kernel!!)
+            printf ("TODO: Remove BIOS skip hack!!!\n");
+            m_shellStarted = true;
+            PCSX::g_system->m_eventBus->signal(PCSX::Events::ExecutionFlow::ShellReached{});
+        }
+        */
+
+        assert (m_psxRegs.pc != 0x80030000); // we can hijack the boot!
         assert (m_psxRegs.pc != 0);
         assert (isPcValid(m_psxRegs.pc));
+        if (m_psxRegs.pc == 0xBFC02B68) {
+            printRegs();
+            // exit (10);
+        }
 
 		auto blockPointer = getBlockPointer(m_psxRegs.pc); // pointer to the current x64 block
 		if ((uintptr_t*) *blockPointer == nullptr) { // if the block hasn't been compiled
 			printf("Compiling block\n");
 			recompileBlock(blockPointer); // compile a block, set block pointer to the address of the block
 		}
-		
+
 		auto emittedCode = (JITCallback) *blockPointer; // function pointer to the start of the block
 		(*emittedCode)(); // call emitted code
-		printf("PC: %08X\n", m_psxRegs.pc);
+        psxBranchTest(); // TODO: Find a way to yeet this
+		// printf("PC: %08X\n", m_psxRegs.pc);
 		// printRegs();
 	}
 
@@ -303,12 +316,11 @@ public:
 		uint32_t oldPC = recPC;  // the PC at the start of the block
 		uintptr_t blockStart = (uintptr_t) gen.getCurr(); // the address the current block starts from
 		
-		printf("Current buffer address: %pX\n", blockStart);
 		*blockPointer = (uintptr_t) blockStart; // Add the block to the block cache
 	 
 		gen.push(rbp); // rbp is used as a pointer to the register struct, so we need to back it up
 		gen.mov(rbp, (uint64_t) &m_psxRegs); // store the pointer in rbp
-		gen.sub(rsp, 100); // fix up stack frame so that the return address is not overwritten
+		gen.sub(rsp, 160); // fix up stack frame so that the return address is not overwritten
 		auto compiledInstructions = 0;  // how many instructions we've compiled in this block
 
 		while (shouldContinueCompiling()) {
@@ -327,7 +339,7 @@ public:
 		}
 
 		gen.add(dword [rbp + CYCLE_OFFSET], compiledInstructions); // add 1 cycle for each compiled instruction that was executed
-		gen.add(rsp, 100); // undo the sub
+		gen.add(rsp, 160); // undo the sub
 		flushRegs(); // flush the cached registers
 		gen.pop(rbp); // restore rbp
 		gen.ret(); // emit a RET to return from the JIT 
@@ -511,6 +523,7 @@ public:
 
 	// TODO: Optimize
 	void recLB() { 
+        if (!_Rt_) return; // don't compile if NOP
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
 		gen.mov (rax, (uint64_t) &psxMemRead8Wrapper); // function pointer in rax
 		allocateReg(_Rt_); // allocate rt and mark as non const
@@ -529,6 +542,7 @@ public:
 
 	// TODO: Optimize
 	void recLBU() { // Literally LB with zero extension
+        if (!_Rt_) return; // don't compile if NOP
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
 		gen.mov (rax, (uint64_t) &psxMemRead8Wrapper); // function pointer in rax
 		allocateReg(_Rt_); // allocate rt and mark as non const
@@ -547,6 +561,7 @@ public:
 
 	// TODO: Optimize
 	void recLW() { 
+        if (!_Rt_) return; // don't compile if NOP
 		assert (8 > allocatedRegisters); // assert that we're not trampling any allocated regs
 		gen.mov (rax, (uint64_t) &psxMemRead32Wrapper); // function pointer in rax
 		allocateReg(_Rt_); // allocate rt and mark as non const
@@ -854,7 +869,7 @@ public:
 		const uint32_t target = recPC + (uint32_t) _Imm_ * 4; // the address we'll jump to if the branch is taken
 
 		if (isConst(_Rs_) && isConst(_Rt_)) {  // if both operands are constant
-			if (registers[_Rs_].val != registers[_Rt_].val)  // and they're not equal
+			if (registers[_Rs_].val == registers[_Rt_].val)  // and they're equal
 				gen.mov (dword[rbp + PC_OFFSET], target); // store new PC
 			else // else just continue
 				gen.mov (dword[rbp + PC_OFFSET], recPC + 4);
