@@ -84,7 +84,7 @@ uint8_t PCSX::HW::psxHwRead8(uint32_t add) {
             break;
         default:
             hard = psxHu8(add);
-            PSXHW_LOG("*unknown 8bit read at address %x\n", add);
+            PSXHW_LOG("*Unknown 8bit read at address %x\n", add);
             return hard;
     }
 

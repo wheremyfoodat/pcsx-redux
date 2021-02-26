@@ -310,7 +310,7 @@ uint32_t PCSX::Memory::psxMemRead32(uint32_t mem) {
         if (PCSX::g_emulator->settings.get<PCSX::Emulator::SettingDebug>()) {
             PCSX::g_emulator->m_debug->checkBP(mem, PCSX::Debug::BR4);
         }
-
+        
         return SWAP_LEu32(*(uint32_t *)(pointer + (mem & 0xffff)));
     } else {
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
