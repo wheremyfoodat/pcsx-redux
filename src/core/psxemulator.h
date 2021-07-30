@@ -173,6 +173,7 @@ class Emulator {
     typedef Setting<bool, TYPESTRING("Mcd1Inserted"), true> SettingMcd1Inserted;
     typedef Setting<bool, TYPESTRING("Mcd2Inserted"), true> SettingMcd2Inserted;
     typedef Setting<bool, TYPESTRING("Dynarec"), true> SettingDynarec;
+    typedef Setting<int, TYPESTRING("DynarecCacheSize"), 32> SettingDynarecCacheSize;
     typedef Setting<bool, TYPESTRING("8Megs"), false> Setting8MB;
     typedef Setting<int, TYPESTRING("GUITheme"), 0> SettingGUITheme;
     typedef Setting<bool, TYPESTRING("UseFrameSkip"), false> SettingFrameskip;
@@ -183,8 +184,8 @@ class Emulator {
     Settings<SettingStdout, SettingLogfile, SettingMcd1, SettingMcd2, SettingBios, SettingPpfDir, SettingPsxExe,
              SettingXa, SettingSpuIrq, SettingBnWMdec, SettingAutoVideo, SettingVideo, SettingCDDA, SettingFastBoot,
              SettingDebugSettings, SettingRCntFix, SettingIsoPath, SettingLocale, SettingMcd1Inserted,
-             SettingMcd2Inserted, SettingBiosOverlay, SettingDynarec, Setting8MB, SettingGUITheme, SettingFrameskip,
-             SettingFrameLimit, SettingSSSPSXLimit, SettingDither>
+             SettingMcd2Inserted, SettingBiosOverlay, SettingDynarec, SettingDynarecCacheSize, Setting8MB, 
+             SettingGUITheme, SettingFrameskip, SettingFrameLimit, SettingSSSPSXLimit, SettingDither>
         settings;
     class PcsxConfig {
       public:

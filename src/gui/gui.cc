@@ -1129,6 +1129,7 @@ this setting may not have any effect for you.)"));
         ShowHelpMarker(_(R"(Emulates an installed 8MB system,
 instead of the normal 2MB. Useful for working
 with development binaries and games.)"));
+        changed |= ImGui::SliderInt("Dynarec code cache size", &settings.get<Emulator::SettingDynarecCacheSize>().value, 8, 512);
 
         {
             static const char* types[] = {"Auto", "NTSC", "PAL"};

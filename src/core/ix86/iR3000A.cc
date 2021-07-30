@@ -79,7 +79,7 @@ class X86DynaRecCPU final : public PCSX::R3000Acpu {
     inline bool Implemented() final { return true; }
 
   public:
-    X86DynaRecCPU() : R3000Acpu("x86 DynaRec"), gen(ALLOC_SIZE) {}
+    X86DynaRecCPU() : R3000Acpu("x86 DynaRec"), gen(getRecMemSize() + 0x1000), m_recMemSize(getRecMemSize()) {}
 
   private:
     virtual bool Init() final;
@@ -96,17 +96,21 @@ class X86DynaRecCPU final : public PCSX::R3000Acpu {
         return that->m_psxRegs.pc;
     }
 
+    uintptr_t getRecMemSize() {
+        return PCSX::g_emulator->settings.get<PCSX::Emulator::SettingDynarecCacheSize>() * 1024 * 1024;
+    }
+
     void maybeCancelDelayedLoad(uint32_t index) {
         unsigned other = m_currentDelayedLoad ^ 1;
         if (m_delayedLoadInfo[other].index == index) m_delayedLoadInfo[other].active = false;
     }
 
     uintptr_t *m_psxRecLUT;
-    static constexpr size_t RECMEM_SIZE = 16 * 1024 * 1024;
     CodeGenerator gen;
 
     uint8_t *m_recRAM;   // Pointers to compiled RAM blocks here
     uint8_t *m_recROM;   // Pointers to compiled BIOS blocks here 
+    uintptr_t m_recMemSize; // Size of the code cache
 
     uint32_t m_pc; // recompiler pc
 
@@ -145,7 +149,6 @@ class X86DynaRecCPU final : public PCSX::R3000Acpu {
     static const func_t m_pgxpRecBSCMem[64];
 
     static const unsigned DYNAREC_BLOCK = 50;
-    static const size_t ALLOC_SIZE = RECMEM_SIZE + 0x1000;
 
     void MapConst(unsigned reg, uint32_t _const);
     void iFlushReg(unsigned reg);
@@ -3030,7 +3033,7 @@ const func_t X86DynaRecCPU::m_pgxpRecBSCMem[64] = {
 
 void X86DynaRecCPU::recRecompile() {
     /* if the code buffer reached the mem limit reset whole mem */
-    if (gen.getSize() >= RECMEM_SIZE) {
+    if (gen.getSize() >= m_recMemSize) {
         flushCache();
     } else {
         gen.align(32);
