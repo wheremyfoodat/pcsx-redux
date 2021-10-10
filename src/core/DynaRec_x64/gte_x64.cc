@@ -27,8 +27,6 @@
 // TODO: If a GTE instruction gets skipped because COP2 is disabled, the register allocator will very likely break
 // By backing up and allocating a reg inside the (skipped) instruction handler, then restoring a junk value into it in the epilogue
 void DynaRecCPU::recCOP2() {
-    setupStackFrame(); // Set up a stack frame outside the conditional block
-
     Label end;
     gen.test(dword[contextPointer + COP0_OFFSET(12)], 0x40000000); // Check SR to see if COP2 (GTE) is enabled
     gen.jz(end); // Skip the opcode if not
@@ -172,7 +170,7 @@ static uint32_t MFC2Wrapper(int reg) {
 
 void DynaRecCPU::recMFC2() {
     gen.mov(arg1, _Rd_);
-    call<false>(MFC2Wrapper); // No need for a stack frame as recCOP2 sets it up for us
+    call(MFC2Wrapper); // No need for a stack frame as recCOP2 sets it up for us
 
     if (_Rt_) {
         maybeCancelDelayedLoad(_Rt_);
@@ -194,7 +192,6 @@ void DynaRecCPU::recCFC2() {
 
 void DynaRecCPU::recLWC2() {
     Label end;
-    setupStackFrame(); // This instruction might skipped, so set up the stack frame  outside the conditional block
     gen.test(dword[contextPointer + COP0_OFFSET(12)], 0x40000000);  // Check SR to see if COP2 is enabled
     gen.jz(end); // Skip the opcode if not
 
@@ -205,7 +202,7 @@ void DynaRecCPU::recLWC2() {
         gen.lea(arg1, dword[m_regs[_Rs_].allocatedReg + _Imm_]);
     }
 
-    call<false>(psxMemRead32Wrapper); // Read a value from memory. No need to set up a stack frame as we did it before
+    call(psxMemRead32Wrapper); // Read a value from memory. No need to set up a stack frame as we did it before
     switch (_Rt_) {
         case 15:
         case 28:
@@ -224,12 +221,11 @@ void DynaRecCPU::recLWC2() {
 
 void DynaRecCPU::recSWC2() {
     Label end;
-    setupStackFrame();  // This instruction might skipped, so set up the stack frame  outside the conditional block
     gen.test(dword[contextPointer + COP0_OFFSET(12)], 0x40000000);  // Check SR to see if COP2 is enabled
     gen.jz(end);                                                    // Skip the opcode if not
 
     gen.mov(arg1, _Rt_);
-    call<false>(MFC2Wrapper);  // Fetch the COP2 data reg in eax
+    call(MFC2Wrapper);  // Fetch the COP2 data reg in eax
 
     // Address in arg1
     if (m_regs[_Rs_].isConst()) {
@@ -240,7 +236,7 @@ void DynaRecCPU::recSWC2() {
     }
 
     gen.mov(arg2, eax); // Value to write in arg2
-    call<false>(psxMemWrite32Wrapper);
+    call(psxMemWrite32Wrapper);
 
     gen.L(end);
 }
@@ -252,7 +248,7 @@ static void name##Wrapper(uint32_t instruction) {  \
                                                    \
 void DynaRecCPU::rec##name() {                     \
     gen.mov(arg1, m_psxRegs.code);                 \
-    call<false>(name##Wrapper);                    \
+    call(name##Wrapper);                           \
 }
 
 // Note: The GTE recompiler functions don't set up a stack frame, because recCOP2 does it already

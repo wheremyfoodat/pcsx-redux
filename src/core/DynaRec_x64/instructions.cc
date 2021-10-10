@@ -740,6 +740,22 @@ void DynaRecCPU::recompileLoad() {
                     break;
             }
             return;
+        } else if (addr == 0x1f801810 && size == 32) {
+            call(GPU_readDataWrapper);
+            if (_Rt_) {
+                allocateRegWithoutLoad(_Rt_);
+                gen.mov(m_regs[_Rt_].allocatedReg, eax);
+            }
+
+            return;
+        } else if (addr == 0x1f801814 && size == 32) {
+            call(GPU_readStatusWrapper);
+            if (_Rt_) {
+                allocateRegWithoutLoad(_Rt_);
+                gen.mov(m_regs[_Rt_].allocatedReg, eax);
+            }
+
+            return;
         }
 
         gen.mov(arg1, addr);
@@ -747,6 +763,7 @@ void DynaRecCPU::recompileLoad() {
         allocateReg(_Rs_);
         gen.lea(arg1, dword[m_regs[_Rs_].allocatedReg + _Imm_]);
     }
+
 
     switch (size) {
         case 8:
@@ -1361,8 +1378,6 @@ void DynaRecCPU::testSoftwareInterrupt() {
     }
 
     m_stopCompiling = true;
-    setupStackFrame(); // This function uses a conditional call, so we will have to set up a stack frame separately and unconditionally.
-
     if constexpr (loadSR) {
         gen.mov(eax, dword[contextPointer + COP0_OFFSET(12)]);  // eax = SR
     }
@@ -1371,7 +1386,7 @@ void DynaRecCPU::testSoftwareInterrupt() {
 
     gen.mov(arg2, dword[contextPointer + COP0_OFFSET(13)]); // arg2 = CAUSE
     gen.and_(eax, arg2);
-    gen.and_(eax, 0x300);                             // Check if an interrupt was force-fired
+    gen.test(eax, 0x300);                             // Check if an interrupt was force-fired
     gen.jz(label, CodeGenerator::LabelType::T_NEAR);  // Skip to the end if not
 
     // Fire the interrupt if it was triggered
@@ -1379,7 +1394,7 @@ void DynaRecCPU::testSoftwareInterrupt() {
     loadThisPointer(arg1.cvt64());
     gen.mov(arg3, (int32_t) m_inDelaySlot); // Store whether we're in a delay slot in arg3
     gen.mov(dword[contextPointer + PC_OFFSET], m_pc - 4); // PC for exception handler to use
-    call<false>(psxExceptionWrapper); // Call the exception wrapper function
+    call(psxExceptionWrapper); // Call the exception wrapper function
 
     gen.L(label);
 }
@@ -1426,6 +1441,7 @@ void DynaRecCPU::recJ() {
     m_pcWrittenBack = true;
 
     gen.mov(dword[contextPointer + PC_OFFSET], target);  // Write PC
+    m_linkedPC = target; // Link this block to the next one
 }
 
 void DynaRecCPU::recJAL() {
@@ -1450,6 +1466,7 @@ void DynaRecCPU::recJR() {
 
     if (m_regs[_Rs_].isConst()) {
         gen.mov(dword[contextPointer + PC_OFFSET], m_regs[_Rs_].val & ~3);  // force align jump address
+        m_linkedPC = m_regs[_Rs_].val & ~3;
     } else {
         allocateReg(_Rs_);
         gen.and_(m_regs[_Rs_].allocatedReg, ~3); // Align jump address
@@ -1475,6 +1492,7 @@ void DynaRecCPU::recREGIMM() {
                 m_stopCompiling = true;
 
                 gen.mov(dword[contextPointer + PC_OFFSET], target);
+                m_linkedPC = target;
             }
         }
 
@@ -1484,6 +1502,7 @@ void DynaRecCPU::recREGIMM() {
                 m_stopCompiling = true;
 
                 gen.mov(dword[contextPointer + PC_OFFSET], target);
+                m_linkedPC = target;
             }
         }
 
@@ -1528,7 +1547,9 @@ void DynaRecCPU::recBEQ() {
         if (m_regs[_Rs_].val == m_regs[_Rt_].val) {
             m_pcWrittenBack = true;
             m_stopCompiling = true;
+            
             gen.mov(dword[contextPointer + PC_OFFSET], target);
+            m_linkedPC = target;
         }
         return;
     } else if (m_regs[_Rs_].isConst()) {
