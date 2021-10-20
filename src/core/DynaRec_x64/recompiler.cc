@@ -42,7 +42,7 @@ void DynaRecCPU::execute() {
 
     auto recompilerFunc = getBlockPointer(m_psxRegs.pc);
     if (*recompilerFunc == nullptr) { // Check if this block has been compiled, compile it if not
-        recompile(recompilerFunc);
+        recompile(recompilerFunc, m_psxRegs.pc);
     }
 
     const auto emittedCode = *recompilerFunc;
@@ -70,16 +70,16 @@ void DynaRecCPU::flushCache() {
     std::memset(m_ramBlocks, 0, m_ramSize / 4 * sizeof(DynarecCallback)); // Delete all RAM blocks
 }
 
-void DynaRecCPU::recompile(DynarecCallback* callback) {
+void DynaRecCPU::recompile(DynarecCallback* callback, uint32_t pc) {
     m_stopCompiling = false;
     m_inDelaySlot = false;
     m_nextIsDelaySlot = false;
     m_delayedLoadInfo[0].active = false;
     m_delayedLoadInfo[1].active = false;
     m_pcWrittenBack = false;
-    m_pc = m_psxRegs.pc;
+    m_pc = pc;
 
-    const auto startingPC = m_pc;
+    const auto startingPC = pc;
 
     int count = 0; // How many instructions have we compiled?
     gen.align(16);  // Align next block
@@ -126,6 +126,7 @@ void DynaRecCPU::recompile(DynarecCallback* callback) {
     flushRegs();
     if (!m_pcWrittenBack) {
         gen.mov(dword[contextPointer + PC_OFFSET], m_pc);
+        m_linkedPC = m_pc;
     }
 
      // If this was the block at 0x8003'0000 (Start of shell) send the GUI a "shell reached" signal
@@ -143,9 +144,28 @@ void DynaRecCPU::recompile(DynarecCallback* callback) {
     }
 
     gen.add(dword[contextPointer + CYCLE_OFFSET], count * PCSX::Emulator::BIAS);  // Add block cycles
-
     gen.pop(contextPointer); // Restore our context pointer register
-    gen.ret();
+
+    if (m_linkedPC && isPcValid(m_linkedPC.value())) {
+        const uint32_t nextPC = m_linkedPC.value();
+        Xbyak::Label notCompiled;
+        const auto pointer = getBlockPointer(nextPC);
+
+        gen.mov(rax, (uintptr_t) pointer); // Load address of pointer to next block
+        gen.mov(rdx, qword[rax]);
+        gen.test(rdx, rdx); // If it hasn't been compiled, return. Otherwise, jump to it
+        gen.jz(notCompiled, CodeGenerator::LabelType::T_SHORT);
+        gen.jmp(rdx);
+        gen.L(notCompiled);
+        gen.ret();
+
+        m_linkedPC = std::nullopt;
+        if (*pointer == nullptr) { // Precompile block if necessary
+            recompile(pointer, nextPC);
+        }
+    } else {
+        gen.ret();
+    }
 }
 
 void DynaRecCPU::recSpecial() {

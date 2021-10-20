@@ -1415,12 +1415,12 @@ void DynaRecCPU::testSoftwareInterrupt() {
         gen.mov(eax, dword[contextPointer + COP0_OFFSET(12)]);  // eax = SR
     }
     gen.test(eax, 1);                                      // Check if interrupts are enabled
-    gen.jz(label, CodeGenerator::LabelType::T_NEAR);       // If not, skip to the end
+    gen.jz(label, CodeGenerator::LabelType::T_SHORT);       // If not, skip to the end
 
     gen.mov(arg2, dword[contextPointer + COP0_OFFSET(13)]); // arg2 = CAUSE
     gen.and_(eax, arg2);
     gen.test(eax, 0x300);                             // Check if an interrupt was force-fired
-    gen.jz(label, CodeGenerator::LabelType::T_NEAR);  // Skip to the end if not
+    gen.jz(label, CodeGenerator::LabelType::T_SHORT);  // Skip to the end if not
 
     // Fire the interrupt if it was triggered
     // This object in arg1. Exception code is already in arg2 from before (will be masked by exception handler)
@@ -1445,6 +1445,7 @@ void DynaRecCPU::recBNE() {
             m_pcWrittenBack = true;
             m_stopCompiling = true;
             gen.mov(dword[contextPointer + PC_OFFSET], target);
+            m_linkedPC = target;
         }
         return;
     } else if (m_regs[_Rs_].isConst()) {
@@ -1474,6 +1475,7 @@ void DynaRecCPU::recJ() {
     m_pcWrittenBack = true;
 
     gen.mov(dword[contextPointer + PC_OFFSET], target);  // Write PC
+    m_linkedPC = target;
 }
 
 void DynaRecCPU::recJAL() {
@@ -1498,6 +1500,7 @@ void DynaRecCPU::recJR() {
 
     if (m_regs[_Rs_].isConst()) {
         gen.mov(dword[contextPointer + PC_OFFSET], m_regs[_Rs_].val & ~3);  // force align jump address
+        m_linkedPC = m_regs[_Rs_].val & ~3;
     } else {
         allocateReg(_Rs_);
         gen.and_(m_regs[_Rs_].allocatedReg, ~3); // Align jump address
@@ -1523,6 +1526,7 @@ void DynaRecCPU::recREGIMM() {
                 m_stopCompiling = true;
 
                 gen.mov(dword[contextPointer + PC_OFFSET], target);
+                m_linkedPC = target;
             }
         }
 
@@ -1532,6 +1536,7 @@ void DynaRecCPU::recREGIMM() {
                 m_stopCompiling = true;
 
                 gen.mov(dword[contextPointer + PC_OFFSET], target);
+                m_linkedPC = target;
             }
         }
 
@@ -1577,6 +1582,7 @@ void DynaRecCPU::recBEQ() {
             m_pcWrittenBack = true;
             m_stopCompiling = true;
             gen.mov(dword[contextPointer + PC_OFFSET], target);
+            m_linkedPC = target;
         }
         return;
     } else if (m_regs[_Rs_].isConst()) {
@@ -1612,6 +1618,7 @@ void DynaRecCPU::recBGTZ() {
             m_pcWrittenBack = true;
             m_stopCompiling = true;
             gen.mov(dword[contextPointer + PC_OFFSET], target);
+            m_linkedPC = target;
         }
         return;
     }
@@ -1644,6 +1651,7 @@ void DynaRecCPU::recBLEZ() {
             m_pcWrittenBack = true;
             m_stopCompiling = true;
             gen.mov(dword[contextPointer + PC_OFFSET], target);
+            m_linkedPC = target;
         }
         return;
     }
@@ -1709,7 +1717,7 @@ void DynaRecCPU::recDIV() {
 
         gen.mov(ecx, m_regs[_Rt_].allocatedReg);                   // Divisor in ecx
         gen.test(ecx, ecx);                                        // Check if divisor is 0
-        gen.jz(divisionByZero, CodeGenerator::LabelType::T_NEAR);  // Jump to divisionByZero label if so
+        gen.jz(divisionByZero, CodeGenerator::LabelType::T_SHORT);  // Jump to divisionByZero label if so
     }
 
     gen.cdq();      // Sign extend dividend to 64 bits in edx:eax
@@ -1717,7 +1725,7 @@ void DynaRecCPU::recDIV() {
 
     if (!m_regs[_Rt_].isConst()) {  // Emit a division by 0 handler if the divisor is unknown at compile time
         Label end;
-        gen.jmp(end, CodeGenerator::LabelType::T_NEAR);  // skip to the end if not a div by zero
+        gen.jmp(end, CodeGenerator::LabelType::T_SHORT);  // skip to the end if not a div by zero
         gen.L(divisionByZero);                           // Here starts our division by 0 handler
 
         gen.mov(edx, eax);  // Set hi to $rs
@@ -1772,7 +1780,7 @@ void DynaRecCPU::recDIVU() {
 
         gen.mov(ecx, m_regs[_Rt_].allocatedReg);                   // Divisor in ecx
         gen.test(ecx, ecx);                                        // Check if divisor is 0
-        gen.jz(divisionByZero, CodeGenerator::LabelType::T_NEAR);  // Jump to divisionByZero label if so
+        gen.jz(divisionByZero, CodeGenerator::LabelType::T_SHORT);  // Jump to divisionByZero label if so
     }
 
     gen.xor_(edx, edx);  // Set top 32 bits of dividend to
@@ -1780,7 +1788,7 @@ void DynaRecCPU::recDIVU() {
 
     if (!m_regs[_Rt_].isConst()) {  // Emit a division by 0 handler if the divisor is unknown at compile time
         Label end;
-        gen.jmp(end, CodeGenerator::LabelType::T_NEAR);  // skip to the end if not a div by zero
+        gen.jmp(end, CodeGenerator::LabelType::T_SHORT);  // skip to the end if not a div by zero
         gen.L(divisionByZero);                           // Here starts our division by 0 handler
 
         gen.mov(edx, eax);  // Set hi to $rs

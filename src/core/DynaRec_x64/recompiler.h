@@ -120,6 +120,7 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
 
     Register m_regs[32];
     std::array<HostRegister, ALLOCATEABLE_REG_COUNT> m_hostRegs;
+    std::optional<uint32_t> m_linkedPC = std::nullopt;
 
     template <bool load = true>
     void reserveReg(int index);
@@ -245,7 +246,7 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
     // Check if we're executing from valid memory
     inline bool isPcValid(uint32_t addr) { return m_recompilerLUT[addr >> 16] != nullptr; }
     void execute();
-    void recompile(DynarecCallback* callback);
+    void recompile(DynarecCallback* callback, uint32_t pc);
     void error();
     void flushCache();
     void loadContext();
