@@ -1234,7 +1234,7 @@ bool PCSX::GUI::configure() {
         }
         float scale = settings.get<Emulator::SettingScaler>();
         scale /= 100.0f;
-        changed |= ImGui::SliderFloat(_("Speed Scaler"), &scale, 0.1f, 10.0f);
+        changed |= ImGui::SliderFloat(_("Speed Scaler"), &scale, 0.1f, 15.0f);
         settings.get<Emulator::SettingScaler>() = scale * 100.0f;
         changed |= ImGui::Checkbox(_("Enable XA decoder"), &settings.get<Emulator::SettingXa>().value);
         changed |= ImGui::Checkbox(_("Always enable SPU IRQ"), &settings.get<Emulator::SettingSpuIrq>().value);
