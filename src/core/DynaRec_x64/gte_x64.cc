@@ -72,10 +72,14 @@ void DynaRecCPU::recCTC2() {
                 gen.mov(dword[contextPointer + COP2_CONTROL_OFFSET(_Rd_)], (uint32_t)(int16_t)m_regs[_Rt_].val);
                 break;
 
-            case 31:
-                fmt::print("[GTE] Wrote to FLAG\n");
-                abort();
+            case 31: { // Write to FLAG - Set low 12 bits to 0 and fix up the error flag
+                uint32_t value = m_regs[_Rt_].val & 0x7ffff000;
+                if ((value & 0x7f87e000) != 0) {
+                    value |= 0x80000000;
+                }
+                gen.mov(dword[contextPointer + COP2_CONTROL_OFFSET(31)], value);
                 break;
+            }
 
             default:
                 gen.mov(dword[contextPointer + COP2_CONTROL_OFFSET(_Rd_)], m_regs[_Rt_].val);
@@ -97,9 +101,13 @@ void DynaRecCPU::recCTC2() {
                 gen.mov(dword[contextPointer + COP2_CONTROL_OFFSET(_Rd_)], eax);
                 break;
 
-            case 31:
-                fmt::print("[GTE] Wrote to FLAG\n");
-                abort();
+            case 31: // Write to FLAG - Set low 12 bits to 0 and fix up the error flag
+                gen.mov(ecx, m_regs[_Rt_].allocatedReg);
+                gen.and_(ecx, 0x7ffff000);
+                gen.lea(eax, dword[rcx - 0x80000000]);
+                gen.test(m_regs[_Rt_].allocatedReg, 0x7f87e000);
+                gen.cmove(eax, ecx);
+                gen.mov(dword[contextPointer + COP2_CONTROL_OFFSET(31)], eax);
                 break;
 
             default:
@@ -122,11 +130,37 @@ void DynaRecCPU::recMTC2() {
                 allocateReg(_Rt_);
                 gen.mov(dword[contextPointer + COP2_DATA_OFFSET(14)], m_regs[_Rt_].allocatedReg);
             }
-            return;
+            break;
             
-        case 28:
-            fmt::print("Unimplemented MTC2 to GTE data register {}\n", _Rd_);
-            abort();
+        case 28: // IRGB
+            if (m_regs[_Rt_].isConst()) { // Calculate IR1/IR2/IR3 values and write them back
+                const auto value = m_regs[_Rt_].val;
+
+                const auto IR1 = (value & 0x1f) << 7;
+                const auto IR2 = (value & 0x3e0) << 2;
+                const auto IR3 = (value & 0x7c00) >> 3;
+
+                gen.mov(dword[contextPointer + COP2_DATA_OFFSET(9)], IR1);
+                gen.mov(dword[contextPointer + COP2_DATA_OFFSET(10)], IR2);
+                gen.mov(dword[contextPointer + COP2_DATA_OFFSET(11)], IR3);
+            } else {
+                allocateReg(_Rt_);
+                gen.mov(eax, m_regs[_Rt_].allocatedReg);
+
+                gen.and_(eax, 0x1f); // Calculate IR1
+                gen.shl(eax, 7);
+                gen.mov(dword[contextPointer + COP2_DATA_OFFSET(9)], eax);
+
+                gen.lea(eax, dword[4 * m_regs[_Rt_].allocatedReg]); // Calculate IR2
+                gen.and_(eax, 0xf80); // The above lea shifted eax by 2 first, so we adjust the mask
+                gen.mov(dword[contextPointer + COP2_DATA_OFFSET(10)], eax);
+
+                gen.mov(eax, m_regs[_Rt_].allocatedReg); // Calculate IR3
+                gen.shr(eax, 3);
+                gen.and_(eax, 0xf80);
+                gen.mov(dword[contextPointer + COP2_DATA_OFFSET(11)], eax);
+            }
+            
             break;
 
         case 30:
@@ -208,10 +242,26 @@ void DynaRecCPU::recLWC2() {
     call<false>(psxMemRead32Wrapper); // Read a value from memory. No need to set up a stack frame as we did it before
     switch (_Rt_) {
         case 15:
-        case 28:
         case 30:
             fmt::print("Unimplemented LWC2 to GTE data register {}\n", _Rt_);
             abort();
+            break;
+        
+        case 28: // IRGB
+            gen.mov(ecx, eax);
+
+            gen.and_(ecx, 0x1f); // Calculate IR1
+            gen.shl(ecx, 7);
+            gen.mov(dword[contextPointer + COP2_DATA_OFFSET(9)], ecx);
+
+            gen.lea(ecx, dword[4 * rax]); // Calculate IR2
+            gen.and_(ecx, 0xf80); // The above lea shifted eax by 2 first, so we adjust the mask
+            gen.mov(dword[contextPointer + COP2_DATA_OFFSET(10)], ecx);
+
+            gen.mov(ecx, eax); // Calculate IR3
+            gen.shr(ecx, 3);
+            gen.and_(ecx, 0xf80);
+            gen.mov(dword[contextPointer + COP2_DATA_OFFSET(11)], ecx);
             break;
     }
     
@@ -236,7 +286,7 @@ void DynaRecCPU::recSWC2() {
         gen.mov(arg1, m_regs[_Rs_].val + _Imm_);
     } else {
         allocateReg(_Rs_);
-        gen.lea(arg1, dword [m_regs[_Rs_].allocatedReg + _Imm_]);
+        gen.moveAndAdd(arg1, m_regs[_Rs_].allocatedReg, _Imm_);
     }
 
     gen.mov(arg2, eax); // Value to write in arg2

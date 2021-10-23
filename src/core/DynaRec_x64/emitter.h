@@ -64,7 +64,7 @@ struct Emitter final : public CodeGenerator {
     // Uses lea if the value is non-zero, or mov otherwise
     void moveAndAdd(Xbyak::Reg32 dest, Xbyak::Reg32 source, uint32_t value) {
         if (value != 0) {
-            lea(dest, dword[source + value]);
+            lea(dest, dword[source.cvt64() + value]);
         } else {
             mov(dest, source);
         }
@@ -148,6 +148,19 @@ struct Emitter final : public CodeGenerator {
                     shl(dest, amount);
                 }
             }
+        }
+    }
+
+    // dest = value - source
+    // Optimizes the value == 0 case, might thrash eax and EFLAGS
+    void reverseSub(Xbyak::Reg32 dest, Xbyak::Reg32 source, uint32_t value) {
+        if (value == 0) {
+            moveReg(dest, source);
+            neg(dest);
+        } else {
+            mov(eax, value);
+            sub(eax, source);
+            mov(dest, eax);
         }
     }
 
