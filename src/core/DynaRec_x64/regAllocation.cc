@@ -78,13 +78,6 @@ void DynaRecCPU::flushRegs() {
     m_allocatedRegisters = 0;
 }
 
-// Save the contextPointer register to the stack (aligning the stack at the same time)
-// And actually load the pointer to our context into it
-void DynaRecCPU::loadContext() {
-    gen.push(contextPointer);                       // Save context pointer register in stack
-    gen.mov(contextPointer, (uint64_t)&m_psxRegs);  // Load context pointer
-}
-
 // Spill the volatile allocated registers into guest registers in preparation for a call to a C++ function
 void DynaRecCPU::prepareForCall() {
     if (m_allocatedRegisters > ALLOCATEABLE_NON_VOLATILE_COUNT) {  // Check if there's any allocated volatiles to flush

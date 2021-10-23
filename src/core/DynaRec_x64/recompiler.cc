@@ -46,7 +46,7 @@ void DynaRecCPU::execute() {
     }
 
     const auto emittedCode = *recompilerFunc;
-    (*emittedCode)();  // Jump to emitted code
+    (*m_dispatcher)(emittedCode);  // Jump to emitted code
     psxBranchTest(); // Check scheduler events
 }
 
@@ -66,8 +66,23 @@ void DynaRecCPU::error() {
 void DynaRecCPU::flushCache() {
     gen.reset();    // Reset the emitter's code pointer and code size variables
     gen.align(16);  // Align next block
-    std::memset(m_biosBlocks, 0, 0x080000 / 4 * sizeof(DynarecCallback));  // Delete all BIOS blocks
+    std::memset(m_biosBlocks, 0, 0x80000 / 4 * sizeof(DynarecCallback));  // Delete all BIOS blocks
     std::memset(m_ramBlocks, 0, m_ramSize / 4 * sizeof(DynarecCallback)); // Delete all RAM blocks
+}
+
+void DynaRecCPU::emitDispatcher() {
+    gen.align(16);
+    
+    m_dispatcher = (DispatchCallback)gen.getCurr();
+    gen.push(contextPointer); // Save context pointer register in stack (also align stack pointer)
+    gen.mov(contextPointer, (uint64_t)&m_psxRegs);  // Load context pointer
+
+    // Allocate shadow stack space on Windows
+    if constexpr (isWindows()) {
+        gen.sub(rsp, 32);
+    }
+    
+    gen.jmp(arg1.cvt64());
 }
 
 void DynaRecCPU::recompile(DynarecCallback* callback, uint32_t pc) {
@@ -89,7 +104,6 @@ void DynaRecCPU::recompile(DynarecCallback* callback, uint32_t pc) {
     }
 
     *callback = (DynarecCallback) gen.getCurr();
-    loadContext(); // Load a pointer to our CPU context
     handleKernelCall(); // Check if this is a kernel call vector, emit some extra code in that case.
 
     auto shouldContinue = [&]() {
@@ -134,29 +148,26 @@ void DynaRecCPU::recompile(DynarecCallback* callback, uint32_t pc) {
     if (startingPC == 0x80030000) {
         loadThisPointer(arg1.cvt64());
         call(signalShellReached);
-    }
-
-    if constexpr (isWindows()) {
-        if (m_needsStackFrame) {
-            gen.add(rsp, 32);  // Deallocate shadow stack space on Windows
-            m_needsStackFrame = false;
-        }
+        m_linkedPC = {};
     }
 
     gen.add(dword[contextPointer + CYCLE_OFFSET], count * PCSX::Emulator::BIAS);  // Add block cycles
-    gen.pop(contextPointer); // Restore our context pointer register
 
     if (m_linkedPC && isPcValid(m_linkedPC.value())) {
         const uint32_t nextPC = m_linkedPC.value();
         Xbyak::Label notCompiled;
         const auto pointer = getBlockPointer(nextPC);
 
-        gen.mov(rax, (uintptr_t) pointer); // Load address of pointer to next block
-        gen.mov(rdx, qword[rax]);
+        gen.mov(rdx, qword[rip+pointer]);
         gen.test(rdx, rdx); // If it hasn't been compiled, return. Otherwise, jump to it
         gen.jz(notCompiled, CodeGenerator::LabelType::T_SHORT);
         gen.jmp(rdx);
         gen.L(notCompiled);
+
+        if constexpr (isWindows()) {
+            gen.add(rsp, 32);
+        }
+        gen.pop(contextPointer);
         gen.ret();
 
         m_linkedPC = std::nullopt;
@@ -164,6 +175,10 @@ void DynaRecCPU::recompile(DynarecCallback* callback, uint32_t pc) {
             recompile(pointer, nextPC);
         }
     } else {
+        if constexpr (isWindows()) {
+            gen.add(rsp, 32);
+        }
+        gen.pop(contextPointer);
         gen.ret();
     }
 }
