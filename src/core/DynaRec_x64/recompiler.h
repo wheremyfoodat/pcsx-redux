@@ -136,6 +136,130 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
     void allocateReg(int reg1, int reg2);
     void allocateReg(int reg1, int reg2, int reg3);
 
+    void alloc_rt_wb_rd() {
+        const bool loadRd = _Rd_ == _Rt_;
+label:
+        int regsToFree = 0;
+
+        if (_Rd_ == _Rt_) {
+            regsToFree = m_regs[_Rd_].allocated ? 0 : 1;
+        } else {
+            if (!m_regs[_Rd_].allocated) regsToFree++;
+            if (!m_regs[_Rt_].allocated) regsToFree++;
+        }
+
+        if (regsToFree != 0) {
+            if (m_allocatedRegisters + regsToFree >= ALLOCATEABLE_REG_COUNT) {
+                spillRegisterCache();
+                goto label;
+            }
+        }
+
+        if (loadRd) {
+            allocateReg(_Rd_);
+        } else {
+            allocateRegWithoutLoad(_Rd_);
+        }
+
+        allocateReg(_Rt_);
+        m_regs[_Rd_].setWriteback(true);
+    }
+
+    void alloc_rs_wb_rd() {
+        const bool loadRd = _Rd_ == _Rs_;  
+label:
+        int regsToFree = 0;
+
+        if (_Rd_ == _Rs_) {
+            regsToFree = m_regs[_Rd_].allocated ? 0 : 1;
+        } else {
+            if (!m_regs[_Rd_].allocated) regsToFree++;
+            if (!m_regs[_Rs_].allocated) regsToFree++;
+        }
+
+        if (regsToFree != 0) {
+            if (m_allocatedRegisters + regsToFree >= ALLOCATEABLE_REG_COUNT) {
+                spillRegisterCache();
+                goto label;
+            }
+        }
+
+        if (loadRd) {
+            allocateReg(_Rd_);
+        } else {
+            allocateRegWithoutLoad(_Rd_);
+        }
+
+        allocateReg(_Rs_);
+        m_regs[_Rd_].setWriteback(true);
+    }
+
+    void alloc_rs_wb_rt() {
+        const bool loadRt = _Rt_ == _Rs_;
+label:
+        int regsToFree = 0;
+
+        if (_Rt_ == _Rs_) {
+            regsToFree = m_regs[_Rt_].allocated ? 0 : 1;
+        } else {
+            if (!m_regs[_Rt_].allocated) regsToFree++;
+            if (!m_regs[_Rs_].allocated) regsToFree++;
+        }
+
+        if (regsToFree != 0) {
+            if (m_allocatedRegisters + regsToFree >= ALLOCATEABLE_REG_COUNT) {
+                spillRegisterCache();
+                goto label;
+            }
+        }
+
+        if (loadRt) {
+            allocateReg(_Rt_);
+        } else {
+            allocateRegWithoutLoad(_Rt_);
+        }
+
+        allocateReg(_Rs_);
+        m_regs[_Rt_].setWriteback(true);
+    }
+
+    void alloc_rt_rs_wb_rd() {
+        const bool loadRd = (_Rd_ == _Rt_) || (_Rd_ == _Rs_);
+label:
+        int regsToFree = 0;
+
+        if (_Rd_ == _Rt_ && _Rd_ == _Rs_) {
+            regsToFree = m_regs[_Rd_].allocated ? 1 : 0;
+        } else if (_Rd_ == _Rt_) {
+            if (!m_regs[_Rd_].allocated) regsToFree++;
+            if (!m_regs[_Rs_].allocated) regsToFree++;
+        } else if ((_Rd_ == _Rs_) || (_Rt_ == _Rs_)) {
+            if (!m_regs[_Rd_].allocated) regsToFree++;
+            if (!m_regs[_Rt_].allocated) regsToFree++;
+        } else {
+            if (!m_regs[_Rd_].allocated) regsToFree++;
+            if (!m_regs[_Rt_].allocated) regsToFree++;
+            if (!m_regs[_Rs_].allocated) regsToFree++;
+        }
+
+        if (regsToFree != 0) {
+            if (m_allocatedRegisters + regsToFree >= ALLOCATEABLE_REG_COUNT) {
+                spillRegisterCache();
+                goto label;
+            }
+        }
+
+        if (loadRd) {
+            allocateReg(_Rd_);
+        } else {
+            allocateRegWithoutLoad(_Rd_);
+        }
+
+        allocateReg(_Rs_);
+        allocateReg(_Rt_);
+        m_regs[_Rd_].setWriteback(true);
+    }
+
     void flushRegs();
     void spillRegisterCache();
     unsigned int m_allocatedRegisters = 0;  // how many registers have been allocated in this block?
@@ -562,6 +686,6 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
 
     static constexpr bool ENABLE_BLOCK_LINKING = true;
     static constexpr bool ENABLE_PROFILER = false;
-    static constexpr bool ENABLE_SYMBOLS = false;
+    static constexpr bool ENABLE_SYMBOLS = true;
 };
 #endif  // DYNAREC_X86_64
