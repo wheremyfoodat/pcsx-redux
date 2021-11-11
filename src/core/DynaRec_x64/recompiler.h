@@ -686,6 +686,6 @@ label:
 
     static constexpr bool ENABLE_BLOCK_LINKING = true;
     static constexpr bool ENABLE_PROFILER = false;
-    static constexpr bool ENABLE_SYMBOLS = true;
+    static constexpr bool ENABLE_SYMBOLS = false;
 };
 #endif  // DYNAREC_X86_64

@@ -48,7 +48,6 @@
 #undef _rRs_
 #undef _rRt_
 #undef _rRd_
-#undef _rSa_
 #undef _rFs_
 #undef _c2dRs_
 #undef _c2dRt_
@@ -77,7 +76,6 @@
 #define _rRs_ m_psxRegs.GPR.r[_Rs_]  // Rs register
 #define _rRt_ m_psxRegs.GPR.r[_Rt_]  // Rt register
 #define _rRd_ m_psxRegs.GPR.r[_Rd_]  // Rd register
-#define _rSa_ m_psxRegs.GPR.r[_Sa_]  // Sa register
 #define _rFs_ m_psxRegs.CP0.r[_Rd_]  // Fs register
 
 #define _c2dRs_ m_psxRegs.CP2D.r[_Rs_]  // Rs cop2 data register
