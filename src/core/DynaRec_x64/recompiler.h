@@ -24,6 +24,7 @@
 #include <array>
 #include <fstream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 #include "core/gpu.h"
@@ -34,13 +35,13 @@
 #include "spu/interface.h"
 #include "tracy/Tracy.hpp"
 
-#define HOST_REG_CACHE_OFFSET(x) ((uintptr_t)&m_psxRegs.hostRegisterCache[(x)] - (uintptr_t)&m_psxRegs)
-#define GPR_OFFSET(x) ((uintptr_t)&m_psxRegs.GPR.r[(x)] - (uintptr_t)&m_psxRegs)
-#define COP0_OFFSET(x) ((uintptr_t)&m_psxRegs.CP0.r[(x)] - (uintptr_t)&m_psxRegs)
-#define PC_OFFSET ((uintptr_t)&m_psxRegs.pc - (uintptr_t)&m_psxRegs)
-#define LO_OFFSET ((uintptr_t)&m_psxRegs.GPR.n.lo - (uintptr_t)&m_psxRegs)
-#define HI_OFFSET ((uintptr_t)&m_psxRegs.GPR.n.hi - (uintptr_t)&m_psxRegs)
-#define CYCLE_OFFSET ((uintptr_t)&m_psxRegs.cycle - (uintptr_t)&m_psxRegs)
+#define HOST_REG_CACHE_OFFSET(x) ((uintptr_t)&m_hostRegisterCache[(x)] - (uintptr_t)this)
+#define GPR_OFFSET(x) ((uintptr_t)&m_psxRegs.GPR.r[(x)] - (uintptr_t)this)
+#define COP0_OFFSET(x) ((uintptr_t)&m_psxRegs.CP0.r[(x)] - (uintptr_t)this)
+#define PC_OFFSET ((uintptr_t)&m_psxRegs.pc - (uintptr_t)this)
+#define LO_OFFSET ((uintptr_t)&m_psxRegs.GPR.n.lo - (uintptr_t)this)
+#define HI_OFFSET ((uintptr_t)&m_psxRegs.GPR.n.hi - (uintptr_t)this)
+#define CYCLE_OFFSET ((uintptr_t)&m_psxRegs.cycle - (uintptr_t)this)
 
 static uint8_t psxMemRead8Wrapper(uint32_t address) { return PCSX::g_emulator->m_psxMem->psxMemRead8(address); }
 static uint16_t psxMemRead16Wrapper(uint32_t address) { return PCSX::g_emulator->m_psxMem->psxMemRead16(address); }
@@ -68,6 +69,8 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
     using func_t = void (DynaRecCPU::*)();  // A function pointer to a dynarec member function
 
   private:
+    uint64_t m_hostRegisterCache[16];  // An array to backup non-volatile regs temporarily
+
     DynarecCallback** m_recompilerLUT;
     DynarecCallback* m_ramBlocks;   // Pointers to compiled RAM blocks (If nullptr then this block needs to be compiled)
     DynarecCallback* m_biosBlocks;  // Pointers to compiled BIOS blocks
@@ -88,6 +91,7 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
     const int MAX_BLOCK_SIZE = 50;
 
     enum class RegState { Unknown, Constant };
+    enum class LoadingMode { DoNotLoad, Load };
 
     struct Register {
         uint32_t val = 0;                    // The register's cached value used for constant propagation
@@ -129,7 +133,7 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
     std::array<HostRegister, ALLOCATEABLE_REG_COUNT> m_hostRegs;
     std::optional<uint32_t> m_linkedPC = std::nullopt;
 
-    template <bool shouldLoad = true>
+    template <LoadingMode mode = LoadingMode::Load>
     void reserveReg(int index);
     void allocateRegWithoutLoad(int reg);
     void allocateReg(int reg);
@@ -273,92 +277,10 @@ label:
     DynaRecCPU() : R3000Acpu("x86-64 DynaRec") {}
 
     virtual bool Implemented() final { return true; }
-    virtual bool Init() final {
-        // Initialize recompiler memory
-        // Check for 8MB RAM expansion
-        const bool ramExpansion = PCSX::g_emulator->settings.get<PCSX::Emulator::Setting8MB>();
-        m_ramSize = ramExpansion ? 0x800000 : 0x200000;
-        const auto biosSize = 0x80000;
-        const int ramPages =
-            m_ramSize >> 16;  // The amount of 64KB RAM pages. 0x80 with the ram expansion, 0x20 otherwise
-
-        m_recompilerLUT = new DynarecCallback*[0x10000]();  // Split the 32-bit address space into 64KB pages, so
-                                                            // 0x10000 pages in total
-
-        // Instructions need to be on 4-byte boundaries. So the amount of valid block entrypoints
-        // in a region of memory is REGION_SIZE / 4
-        m_ramBlocks = new DynarecCallback[m_ramSize / 4];
-        m_biosBlocks = new DynarecCallback[biosSize / 4];
-        m_dummyBlocks = new DynarecCallback[0x10000 / 4];  // Allocate one page worth of dummy blocks
-
-        gen.reset();
-
-        for (int page = 0; page < 0x10000; page++) {  // Default all pages to dummy blocks
-            m_recompilerLUT[page] = &m_dummyBlocks[0];
-        }
-
-        // For every 64KB page of memory, we can have 64*1024/4 unique blocks = 0x4000
-        // Hence the multiplications below
-        for (int page = 0; page < ramPages; page++) {          // Map RAM to the recompiler LUT
-            const auto pointer = &m_ramBlocks[page * 0x4000];  // Get a pointer to the page of RAM blocks
-            m_recompilerLUT[page + 0x0000] = pointer;          // Map KUSEG, KSEG0 and KSEG1 RAM respectively
-            m_recompilerLUT[page + 0x8000] = pointer;
-            m_recompilerLUT[page + 0xA000] = pointer;
-        }
-
-        for (int page = 0; page < 8; page++) {  // Map BIOS to recompiler LUT
-            const auto pointer = &m_biosBlocks[page * 0x4000];
-            m_recompilerLUT[page + 0x1FC0] = pointer;  // Map KUSEG, KSEG0 and KSEG1 BIOS respectively
-            m_recompilerLUT[page + 0x9FC0] = pointer;
-            m_recompilerLUT[page + 0xBFC0] = pointer;
-        }
-
-        if (!gen.setRWX()) {
-            PCSX::g_system->message("[Dynarec] Failed to allocate executable memory.\nTry disabling the Dynarec CPU.");
-            return false;
-        }
-        emitDispatcher();  // Emit our assembly dispatcher
-        uncompileAll();    // Mark all blocks as uncompiled
-
-        for (int i = 0; i < 0x10000 / 4; i++) {  // Mark all dummy blocks as invalid
-            m_dummyBlocks[i] = m_invalidBlock;
-        }
-
-        if constexpr (ENABLE_SYMBOLS) {
-            makeSymbols();
-        }
-
-        if constexpr (ENABLE_PROFILER) {
-            m_profiler.init();
-        }
-
-        m_regs[0].markConst(0);  // $zero is always zero
-        return true;
-    }
-
-    virtual void Reset() final {
-        R3000Acpu::Reset();  // Reset CPU registers
-        Shutdown();          // Deinit and re-init dynarec
-        Init();
-    }
-
-    virtual void Shutdown() final {
-        delete[] m_recompilerLUT;
-        delete[] m_ramBlocks;
-        delete[] m_biosBlocks;
-        delete[] m_dummyBlocks;
-
-        if constexpr (ENABLE_SYMBOLS) {
-            std::ofstream out("DynarecOutput.map");
-            out << m_symbols;
-            m_symbols.clear();
-            dumpBuffer();
-        }
-
-        if constexpr (ENABLE_PROFILER) {
-            dumpProfileData();
-        }
-    }
+    virtual bool Init() final;
+    virtual void Reset() final;
+    virtual void Shutdown() final;
+    virtual bool isDynarec() final { return true; }
 
     virtual void Execute() final {
         ZoneScoped;         // Tell the Tracy profiler to do its thing
@@ -375,17 +297,20 @@ label:
         }
     }
 
-    virtual void SetPGXPMode(uint32_t pgxpMode) final {}
-    virtual bool isDynarec() final { return true; }
+    virtual void SetPGXPMode(uint32_t pgxpMode) final {
+        if (pgxpMode != 0) {
+            throw std::runtime_error("PGXP not supported in x64 JIT");
+        }
+    }
 
-    void dumpBuffer() {
+    void dumpBuffer() const {
         std::ofstream file("DynarecOutput.dump", std::ios::binary);  // Make a file for our dump
-        file.write((const char*)gen.getCode(), gen.getSize());       // Write the code buffer to the dump
+        file.write(gen.getCode<const char*>(), gen.getSize());       // Write the code buffer to the dump
     }
 
     // Sets dest to "pointer", using base pointer relative addressing if possible
     void loadAddress(Xbyak::Reg64 dest, void* pointer) {
-        const auto distance = (intptr_t)pointer - (intptr_t)&m_psxRegs;
+        const auto distance = (intptr_t)pointer - (intptr_t)this;
 
         if (Xbyak::inner::IsInInt32(distance)) {
             gen.lea(dest, ptr[contextPointer + distance]);
@@ -397,8 +322,8 @@ label:
     // Loads a value into dest from the given pointer.
     // Tries to use base pointer relative addressing, otherwise uses movabs
     template <int size, bool signExtend>
-    void load(Xbyak::Reg32 dest, void* pointer) {
-        const auto distance = (intptr_t)pointer - (intptr_t)&m_psxRegs;
+    void load(Xbyak::Reg32 dest, const void* pointer) {
+        const auto distance = (intptr_t)pointer - (intptr_t)this;
 
         if (Xbyak::inner::IsInInt32(distance)) {
             switch (size) {
@@ -433,8 +358,8 @@ label:
     // Stores a value of "size" bits from "source" to the given pointer
     // Tries to use base pointer relative addressing, otherwise uses movabs
     template <int size, typename T>
-    void store(T source, void* pointer) {
-        const auto distance = (intptr_t)pointer - (intptr_t)&m_psxRegs;
+    void store(T source, const void* pointer) {
+        const auto distance = (intptr_t)pointer - (intptr_t)this;
 
         if (Xbyak::inner::IsInInt32(distance)) {
             switch (size) {
@@ -621,7 +546,7 @@ label:
 
     // Load a pointer to the JIT object in "reg" using lea with the context pointer
     void loadThisPointer(Xbyak::Reg64 reg) {
-        gen.lea(reg, qword[contextPointer - ((uintptr_t)&m_psxRegs - (uintptr_t)this)]);
+        gen.mov(reg, contextPointer);
     }
 
     template <int size, bool signExtend>

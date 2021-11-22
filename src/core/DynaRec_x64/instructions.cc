@@ -283,7 +283,7 @@ void DynaRecCPU::recANDI() {
         } else {
             allocateReg(_Rt_);
             m_regs[_Rt_].setWriteback(true);
-            gen.and_(m_regs[_Rt_].allocatedReg, _ImmU_);
+            gen.andImm(m_regs[_Rt_].allocatedReg, m_regs[_Rt_].allocatedReg, _ImmU_);
         }
     } else {
         if (m_regs[_Rs_].isConst()) {
@@ -1431,7 +1431,7 @@ void DynaRecCPU::recJR() {
         m_linkedPC = m_regs[_Rs_].val;
     } else {
         allocateReg(_Rs_);
-        gen.and_(m_regs[_Rs_].allocatedReg, ~3); // Align jump address
+        // PC will get force aligned in the dispatcher since it discards the 2 lower bits
         gen.mov(dword[contextPointer + PC_OFFSET], m_regs[_Rs_].allocatedReg);
     }
 }
