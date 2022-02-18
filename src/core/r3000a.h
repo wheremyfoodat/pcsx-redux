@@ -19,9 +19,9 @@
 
 #pragma once
 
-#include <stdint.h>
-
 #include <atomic>
+#include <cassert>
+#include <cstdint>
 #include <memory>
 #include <type_traits>
 
@@ -32,17 +32,24 @@
 #include "support/file.h"
 #include "support/hashtable.h"
 
+
 #if defined(__i386__) || defined(_M_IX86)
 #define DYNAREC_X86_32
 #elif defined(__x86_64) || defined(_M_AMD64)
 #define DYNAREC_X86_64
 #elif defined(__aarch64__) || defined(_M_ARM64) || defined(__ARM_ARCH_ISA_A64)
-#define DYNAREC_NONE  // Placeholder for AA64
+#define DYNAREC_AA64
 #elif defined(__arm__) || defined(_M_ARM)
 #define DYNAREC_NONE  // Placeholder for AA32
 #elif defined(__powerpc__) || defined(_M_PPC)
 #define DYNAREC_NONE  // Placeholder for PPC
 #else
+#define DYNAREC_NONE
+#endif
+
+// Disable AA64 JIT on Windows for now
+#if defined(DYNAREC_AA64) && (defined(WIN32) || defined(_WIN32) || defined(__WIN32) && !defined(__CYGWIN__))
+#undef DYNAREC_AA64
 #define DYNAREC_NONE
 #endif
 
@@ -91,6 +98,9 @@ typedef union {
     uint32_t r[34]; /* Lo, Hi in r[32] and r[33] */
     PAIR p[34];
 } psxGPRRegs;
+
+// Make sure no packing is inserted anywhere
+static_assert(sizeof(psxGPRRegs) == 34 * sizeof(uint32_t));
 
 typedef union {
     struct {
@@ -264,6 +274,9 @@ class R3000Acpu {
     virtual void Shutdown() = 0;
     virtual void SetPGXPMode(uint32_t pgxpMode) = 0;
     virtual bool Implemented() = 0;
+    // For the GUI dynarec disassembly widget
+    virtual const uint8_t *getBufferPtr() = 0;
+    virtual const size_t getBufferSize() = 0;
 
     const std::string &getName() { return m_name; }
 

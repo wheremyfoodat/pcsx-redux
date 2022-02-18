@@ -46,13 +46,7 @@
 
 #ifndef MAXPATHLEN
 #ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
+#include "support/windowswrapper.h"
 #endif
 #ifdef MAX_PATH
 #define MAXPATHLEN MAX_PATH
@@ -184,11 +178,13 @@ class Emulator {
     typedef Setting<bool, TYPESTRING("8Megs"), false> Setting8MB;
     typedef Setting<int, TYPESTRING("GUITheme"), 0> SettingGUITheme;
     typedef Setting<int, TYPESTRING("Dither"), 2> SettingDither;
+    typedef Setting<bool, TYPESTRING("ReportGLErrors"), false> SettingGLErrorReporting;
 
     Settings<SettingStdout, SettingLogfile, SettingMcd1, SettingMcd2, SettingBios, SettingPpfDir, SettingPsxExe,
              SettingXa, SettingSpuIrq, SettingBnWMdec, SettingScaler, SettingAutoVideo, SettingVideo, SettingCDDA,
              SettingFastBoot, SettingDebugSettings, SettingRCntFix, SettingIsoPath, SettingLocale, SettingMcd1Inserted,
-             SettingMcd2Inserted, SettingBiosOverlay, SettingDynarec, Setting8MB, SettingGUITheme, SettingDither>
+             SettingMcd2Inserted, SettingBiosOverlay, SettingDynarec, Setting8MB, SettingGUITheme, SettingDither,
+             SettingGLErrorReporting>
         settings;
     class PcsxConfig {
       public:
@@ -215,7 +211,6 @@ class Emulator {
 
     // It is safe if these overflow
     uint32_t m_rewind_counter = 0;
-    uint8_t m_vblank_count_hideafter = 0;
 
     // Used for overclocking
     // Make the timing events trigger faster as we are currently assuming everything

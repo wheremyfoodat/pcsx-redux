@@ -112,6 +112,18 @@ static void drop_callback(GLFWwindow* window, int count, const char** paths) {
     s_this->magicOpen(paths[0]);
 }
 
+static void ShowHelpMarker(const char* desc) {
+    ImGui::SameLine();
+    ImGui::TextDisabled("(?)");
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
+        ImGui::TextUnformatted(desc);
+        ImGui::PopTextWrapPos();
+        ImGui::EndTooltip();
+    }
+}
+
 void LoadImguiBindings(lua_State* lState);
 
 ImFont* PCSX::GUI::loadFont(const PCSX::u8string& name, int size, ImGuiIO& io, const ImWchar* ranges, bool combine) {
@@ -259,6 +271,7 @@ end)(jit.status()))
 
     s_this = this;
     glfwSetDropCallback(m_window, drop_callback);
+    glfwSetWindowSizeCallback(m_window, [](GLFWwindow*, int, int) { s_this->m_setupScreenSize = true; });
 
     Resources::loadIcon([this](const uint8_t* data, uint32_t size) {
         int x, y, comp;
@@ -294,7 +307,8 @@ end)(jit.status()))
         auto& emuSettings = PCSX::g_emulator->settings;
         auto& debugSettings = emuSettings.get<Emulator::SettingDebugSettings>();
         json j;
-        if (cfg.is_open() && !m_args.get<bool>("safe")) {
+        bool safeMode = m_args.get<bool>("safe").value_or(false);
+        if (cfg.is_open() && !safeMode) {
             try {
                 cfg >> j;
             } catch (...) {
@@ -332,8 +346,7 @@ end)(jit.status()))
         }
 
         setFullscreen(m_fullscreen);
-        const auto currentTheme =
-            g_emulator->settings.get<Emulator::SettingGUITheme>().value;  // On boot: reload GUI theme
+        const auto currentTheme = emuSettings.get<Emulator::SettingGUITheme>().value;  // On boot: reload GUI theme
         applyTheme(currentTheme);
 
         if (emuSettings.get<Emulator::SettingMcd1>().empty()) {
@@ -359,7 +372,7 @@ end)(jit.status()))
 
         g_system->activateLocale(emuSettings.get<PCSX::Emulator::SettingLocale>());
 
-        g_system->m_eventBus->signal(Events::SettingsLoaded{});
+        g_system->m_eventBus->signal(Events::SettingsLoaded{safeMode});
 
         std::filesystem::path isoToOpen = m_args.get<std::string>("iso", "");
         if (!isoToOpen.empty()) PCSX::g_emulator->m_cdrom->m_iso.setIsoPath(isoToOpen);
@@ -397,8 +410,10 @@ end)(jit.status()))
     glfwSetKeyCallback(m_window, glfwKeyCallbackTrampoline);
     glfwSetJoystickCallback([](int jid, int event) { PCSX::g_emulator->m_pads->scanGamepads(); });
     ImGui_ImplOpenGL3_Init(GL_SHADER_VERSION);
-    glEnable(GL_DEBUG_OUTPUT);
-    if (glDebugMessageCallback) {
+
+    if (glDebugMessageCallback && g_emulator->settings.get<Emulator::SettingGLErrorReporting>()) {
+        m_reportGLErrors = true;
+        glEnable(GL_DEBUG_OUTPUT);
         glDebugMessageCallback(
             [](GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message,
                GLvoid* userParam) {
@@ -425,6 +440,8 @@ end)(jit.status()))
     m_mainVRAMviewer.setMain();
     m_mainVRAMviewer.setTitle([]() { return _("Main VRAM Viewer"); });
     m_clutVRAMviewer.setTitle([]() { return _("CLUT VRAM selector"); });
+    m_memcardManager.initTextures();
+
     unsigned counter = 1;
     for (auto& viewer : m_VRAMviewers) {
         viewer.setTitle([counter]() { return _("Vram Viewer #") + std::to_string(counter); });
@@ -451,6 +468,8 @@ end)(jit.status()))
     m_biosEditor.title = []() { return _("BIOS"); };
     m_biosEditor.show = false;
 
+    m_offscreenShaderEditor.init();
+    m_outputShaderEditor.init();
     m_offscreenShaderEditor.compile(this);
     m_outputShaderEditor.compile(this);
 
@@ -494,7 +513,7 @@ end)(jit.status()))
     });
 
     startFrame();
-    m_currentTexture = 1;
+    m_currentTexture ^= 1;
     flip();
 }
 
@@ -532,6 +551,29 @@ void PCSX::GUI::startFrame() {
     uv_run(&g_emulator->m_loop, UV_RUN_NOWAIT);
     if (glfwWindowShouldClose(m_window)) g_system->quit();
     glfwPollEvents();
+
+    if (m_setupScreenSize) {
+        constexpr float renderRatio = 3.0f / 4.0f;
+        int w, h;
+
+        glfwGetFramebufferSize(m_window, &w, &h);
+        // Make width/height be 1 at minimum
+        w = std::max<int>(w, 1);
+        h = std::max<int>(h, 1);
+        m_framebufferSize = ImVec2(w, h);
+        m_renderSize = ImVec2(w, h);
+        normalizeDimensions(m_renderSize, renderRatio);
+
+        // Reset texture and framebuffer storage
+        glBindTexture(GL_TEXTURE_2D, m_offscreenTextures[0]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_renderSize.x, m_renderSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glBindTexture(GL_TEXTURE_2D, m_offscreenTextures[1]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_renderSize.x, m_renderSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+
+        glBindRenderbuffer(GL_RENDERBUFFER, m_offscreenDepthBuffer);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, m_renderSize.x, m_renderSize.y);
+        m_setupScreenSize = false;
+    }
 
     auto& io = ImGui::GetIO();
 
@@ -607,12 +649,10 @@ void PCSX::GUI::flip() {
     glBindFramebuffer(GL_FRAMEBUFFER, m_offscreenFrameBuffer);
     glBindTexture(GL_TEXTURE_2D, m_offscreenTextures[m_currentTexture]);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_renderSize.x, m_renderSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 
     glBindRenderbuffer(GL_RENDERBUFFER, m_offscreenDepthBuffer);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, m_renderSize.x, m_renderSize.y);
     glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, m_offscreenDepthBuffer);
     GLuint texture = m_offscreenTextures[m_currentTexture];
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
@@ -623,32 +663,24 @@ void PCSX::GUI::flip() {
 
     assert(glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 
-    glViewport(0, 0, m_renderSize.x, m_renderSize.y);
-
     glClearColor(0, 0, 0, 0);
     glClearDepthf(0.f);
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glFrontFace(GL_CW);
-    glCullFace(GL_BACK);
-    glEnable(GL_CULL_FACE);
-
     glDisable(GL_CULL_FACE);
-    m_currentTexture = m_currentTexture ? 0 : 1;
+    m_currentTexture ^= 1;
 }
 
 void PCSX::GUI::endFrame() {
+    constexpr float renderRatio = 3.0f / 4.0f;
+    const int w = m_framebufferSize.x;
+    const int h = m_framebufferSize.y;
+
     auto& io = ImGui::GetIO();
     // bind back the output frame buffer
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
     auto& emuSettings = PCSX::g_emulator->settings;
     auto& debugSettings = emuSettings.get<Emulator::SettingDebugSettings>();
-
-    int w, h;
-    glfwGetFramebufferSize(m_window, &w, &h);
-    m_renderSize = ImVec2(w, h);
-    normalizeDimensions(m_renderSize, m_renderRatio);
 
     bool changed = false;
 
@@ -681,7 +713,7 @@ void PCSX::GUI::endFrame() {
                 _("Output"), &outputShown,
                 ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse)) {
             ImVec2 textureSize = ImGui::GetContentRegionAvail();
-            normalizeDimensions(textureSize, m_renderRatio);
+            normalizeDimensions(textureSize, renderRatio);
             ImTextureID texture = reinterpret_cast<ImTextureID*>(m_offscreenTextures[m_currentTexture]);
             m_outputShaderEditor.renderWithImgui(this, texture, m_renderSize, textureSize);
         }
@@ -760,14 +792,6 @@ void PCSX::GUI::endFrame() {
                     PCSX::g_emulator->m_cdrom->lidInterrupt();
                 }
                 ImGui::Separator();
-                if (ImGui::MenuItem(_("Memory Card 1 inserted"), nullptr,
-                                    &g_emulator->settings.get<Emulator::SettingMcd1Inserted>().value)) {
-                    g_emulator->m_sio->interrupt();
-                }
-                if (ImGui::MenuItem(_("Memory Card 2 inserted"), nullptr,
-                                    &g_emulator->settings.get<Emulator::SettingMcd2Inserted>().value)) {
-                    g_emulator->m_sio->interrupt();
-                }
                 if (ImGui::MenuItem(_("Reboot"))) {
                     g_system->quit(0x12eb007);
                 }
@@ -810,6 +834,9 @@ void PCSX::GUI::endFrame() {
                         m_overlayLoadSizes[counter] = str;
                         counter++;
                     }
+                }
+                if (ImGui::MenuItem(_("Manage Memory Cards"), nullptr, &m_memcardManager.m_show)) {
+                    m_memcardManager.m_frameCount = 0;  // Reset frame count when memcard manager is toggled
                 }
                 ImGui::MenuItem(_("GPU"), nullptr, &PCSX::g_emulator->m_gpu->m_showCfg);
                 ImGui::MenuItem(_("SPU"), nullptr, &PCSX::g_emulator->m_spu->m_showCfg);
@@ -863,6 +890,14 @@ void PCSX::GUI::endFrame() {
                 }
                 ImGui::MenuItem(_("Show Registers"), nullptr, &m_registers.m_show);
                 ImGui::MenuItem(_("Show Assembly"), nullptr, &m_assembly.m_show);
+                if (PCSX::g_emulator->m_psxCpu->isDynarec()) {
+                    ImGui::MenuItem(_("Show DynaRec Disassembly"), nullptr, &m_disassembly.m_show);
+                } else {
+                    ImGui::MenuItem(_("Show DynaRec Disassembly"), nullptr, false, false);
+                    ShowHelpMarker(
+                        _(R"(DynaRec Disassembler is not available in Interpreted CPU mode. Try enabling [Dynarec CPU]
+in Configuration->Emulation, restart PCSX-Redux, then try again.)"));
+                }
                 ImGui::MenuItem(_("Show Breakpoints"), nullptr, &m_breakpoints.m_show);
                 ImGui::MenuItem(_("Show Callstacks"), nullptr, &m_callstacks.m_show);
                 ImGui::MenuItem(_("Breakpoint on vsync"), nullptr, &m_breakOnVSync);
@@ -876,6 +911,7 @@ void PCSX::GUI::endFrame() {
                     m_biosEditor.MenuItem();
                     ImGui::EndMenu();
                 }
+                ImGui::MenuItem(_("Show Memory Observer"), nullptr, &m_memoryObserver.m_show);
                 ImGui::MenuItem(_("Show Interrupts Scaler"), nullptr, &m_showInterruptsScaler);
                 ImGui::MenuItem(_("Kernel Events"), nullptr, &m_events.m_show);
                 ImGui::MenuItem(_("Kernel Calls"), nullptr, &m_kernelLog.m_show);
@@ -925,7 +961,7 @@ void PCSX::GUI::endFrame() {
             }
             ImGui::Separator();
             ImGui::Separator();
-            ImGui::Text(_("CPU: %s"), g_emulator->m_psxCpu->isDynarec() ? "DynaRec" : "Interpreted");
+            ImGui::Text(_("CPU: %s"), g_emulator->m_psxCpu->getName().c_str());
             ImGui::Separator();
             ImGui::Text(_("GAME ID: %s"), g_emulator->m_cdromId);
             ImGui::Separator();
@@ -1051,6 +1087,10 @@ void PCSX::GUI::endFrame() {
         }
     }
 
+    if (m_memcardManager.m_show) {
+        changed |= m_memcardManager.draw(_("Memory Card Manager"));
+    }
+
     if (m_registers.m_show) {
         m_registers.draw(this, &PCSX::g_emulator->m_psxCpu->m_psxRegs, _("Registers"));
     }
@@ -1060,11 +1100,19 @@ void PCSX::GUI::endFrame() {
                         _("Assembly"));
     }
 
+    if (m_disassembly.m_show && PCSX::g_emulator->m_psxCpu->isDynarec()) {
+        m_disassembly.draw(this, _("DynaRec Disassembler"));
+    }
+
     if (m_breakpoints.m_show) {
         m_breakpoints.draw(_("Breakpoints"));
     }
 
-    about();
+    if (m_memoryObserver.m_show) {
+        m_memoryObserver.draw(_("Memory Observer"));
+    }
+
+    changed |= about();
     interruptsScaler();
 
     if (m_dwarf.m_show) {
@@ -1183,18 +1231,6 @@ void PCSX::GUI::endFrame() {
     }
 
     FrameMark
-}
-
-static void ShowHelpMarker(const char* desc) {
-    ImGui::SameLine();
-    ImGui::TextDisabled("(?)");
-    if (ImGui::IsItemHovered()) {
-        ImGui::BeginTooltip();
-        ImGui::PushTextWrapPos(ImGui::GetFontSize() * 35.0f);
-        ImGui::TextUnformatted(desc);
-        ImGui::PopTextWrapPos();
-        ImGui::EndTooltip();
-    }
 }
 
 bool PCSX::GUI::configure() {
@@ -1508,8 +1544,10 @@ bool PCSX::GUI::showThemes() {
     return changed;
 }
 
-void PCSX::GUI::about() {
-    if (!m_showAbout) return;
+bool PCSX::GUI::about() {
+    if (!m_showAbout) return false;
+    bool changed = false;
+
     ImGui::SetNextWindowPos(ImVec2(200, 100), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(880, 600), ImGuiCond_FirstUseEver);
     if (ImGui::Begin(_("About"), &m_showAbout)) {
@@ -1529,16 +1567,28 @@ void PCSX::GUI::about() {
                 ImGui::EndTabItem();
             }
             if (ImGui::BeginTabItem(_("OpenGL information"))) {
-                if (glDebugMessageCallback) {
+                if (m_reportGLErrors) {
                     ImGui::TextUnformatted(_("OpenGL error reporting: enabled"));
                 } else {
                     ImGui::TextUnformatted(_("OpenGL error reporting: disabled"));
+                    if (!glDebugMessageCallback) {
+                        ShowHelpMarker(_(
+                            "OpenGL error reporting has been disabled because your OpenGL driver is too old. Error "
+                            "reporting requires at least OpenGL 4.3. Please update your graphics drivers, or contact "
+                            "your GPU vendor for correct OpenGL drivers. Disabled OpenGL error reporting won't have a "
+                            "negative impact on the performances of this software, but user code such as the shader "
+                            "editor won't be able to properly report problems accurately."));
+                    }
+                }
+
+                if (glDebugMessageCallback) {
+                    changed |= ImGui::Checkbox(_("Enable OpenGL error reporting"),
+                                               &g_emulator->settings.get<Emulator::SettingGLErrorReporting>().value);
+
                     ShowHelpMarker(
-                        _("OpenGL error reporting has been disabled because your OpenGL driver is too old. Error "
-                          "reporting requires at least OpenGL 4.3. Please update your graphics drivers, or contact "
-                          "your GPU vendor for correct OpenGL drivers. Disabled OpenGL error reporting won't have a "
-                          "negative impact on the performances of this software, but user code such as the shader "
-                          "editor won't be able to properly report problems accurately."));
+                        _("OpenGL error reporting is necessary for properly reporting OpenGL problems. "
+                          "However it requires OpenGL 4.3+ and might have performance repercussions on "
+                          "some PCs. (Requires reboot)"));
                 }
                 ImGui::Text(_("Core profile: %s"), m_hasCoreProfile ? "yes" : "no");
                 someString(_("Vendor"), GL_VENDOR);
@@ -1560,6 +1610,7 @@ void PCSX::GUI::about() {
         }
     }
     ImGui::End();
+    return changed;
 }
 
 void PCSX::GUI::update(bool vsync) {
