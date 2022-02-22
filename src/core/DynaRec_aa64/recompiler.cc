@@ -184,7 +184,7 @@ void DynaRecCPU::emitDispatcher() {
     for (auto i = 0; i < ALLOCATEABLE_NON_VOLATILE_COUNT; i += 2) {
         const auto reg = allocateableNonVolatiles[i];
         const auto reg2 = allocateableNonVolatiles[i + 1];
-        gen.Stp(reg.X(), reg2.X(), MemOperand(sp, -16, PreIndex));
+        gen.Stp(reg2.X(), reg.X(), MemOperand(sp, -16, PreIndex));
     }
 
     gen.Str(runningPointer,
