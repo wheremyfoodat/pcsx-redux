@@ -263,14 +263,15 @@ void PCSX::Memory::psxMemShutdown() {
 }
 
 uint8_t PCSX::Memory::psxMemRead8(uint32_t address) {
-    PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)g_psxMemRLUT[page];
 
     if (pointer != nullptr) {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 6;
         const uint32_t offset = address & 0xffff;
         return *(pointer + offset);
     } else {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
             if ((address & 0xffff) < 0x400)
                 return psxHu8(address);
@@ -284,14 +285,15 @@ uint8_t PCSX::Memory::psxMemRead8(uint32_t address) {
 }
 
 uint16_t PCSX::Memory::psxMemRead16(uint32_t address) {
-    PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)g_psxMemRLUT[page];
 
     if (pointer != nullptr) {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 6;
         const uint32_t offset = address & 0xffff;
         return SWAP_LEu16(*(uint16_t *)(pointer + offset));
     } else {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
             if ((address & 0xffff) < 0x400)
                 return psxHu16(address);
@@ -305,14 +307,15 @@ uint16_t PCSX::Memory::psxMemRead16(uint32_t address) {
 }
 
 uint32_t PCSX::Memory::psxMemRead32(uint32_t address) {
-    PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)g_psxMemRLUT[page];
 
     if (pointer != nullptr) {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 6;
         const uint32_t offset = address & 0xffff;
         return SWAP_LEu32(*(uint32_t *)(pointer + offset));
     } else {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
             if ((address & 0xffff) < 0x400)
                 return psxHu32(address);
@@ -328,15 +331,16 @@ uint32_t PCSX::Memory::psxMemRead32(uint32_t address) {
 }
 
 void PCSX::Memory::psxMemWrite8(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)g_psxMemWLUT[page];
 
     if (pointer != nullptr) {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 6;
         const uint32_t offset = address & 0xffff;
         *(pointer + offset) = static_cast<uint8_t>(value);
         PCSX::g_emulator->m_psxCpu->Clear((address & (~3)), 1);
     } else {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
             if ((address & 0xffff) < 0x400)
                 psxHu8(address) = value;
@@ -349,15 +353,16 @@ void PCSX::Memory::psxMemWrite8(uint32_t address, uint32_t value) {
 }
 
 void PCSX::Memory::psxMemWrite16(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)g_psxMemWLUT[page];
 
     if (pointer != nullptr) {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 6;
         const uint32_t offset = address & 0xffff;
         *(uint16_t*)(pointer + offset) = SWAP_LEu16(static_cast<uint16_t>(value));
         PCSX::g_emulator->m_psxCpu->Clear((address & (~3)), 1);
     } else {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
             if ((address & 0xffff) < 0x400)
                 psxHu16ref(address) = SWAP_LEu16(value);
@@ -370,15 +375,16 @@ void PCSX::Memory::psxMemWrite16(uint32_t address, uint32_t value) {
 }
 
 void PCSX::Memory::psxMemWrite32(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)g_psxMemWLUT[page];
 
     if (pointer != nullptr) {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 6;
         const uint32_t offset = address & 0xffff;
         *(uint32_t *)(pointer + offset) = SWAP_LEu32(value);
         PCSX::g_emulator->m_psxCpu->Clear((address & (~3)), 1);
     } else {
+        PCSX::g_emulator->m_psxCpu->m_psxRegs.cycle += 1;
         if (page == 0x1f80 || page == 0x9f80 || page == 0xbf80) {
             if ((address & 0xffff) < 0x400)
                 psxHu32ref(address) = SWAP_LEu32(value);

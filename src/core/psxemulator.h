@@ -221,7 +221,7 @@ class Emulator {
     // takes one cycle, which is not the case on real hardware.
     // FIXME: Count the proper cycle and get rid of this
     uint32_t m_psxClockSpeed = 33868800 /* 33.8688 MHz */;
-    enum { BIAS = 2 };
+    enum { BIAS = 1 };
 
     int init();
     void reset();
