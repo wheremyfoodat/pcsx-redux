@@ -281,9 +281,9 @@ inline void PCSX::SoftGPU::SoftRenderer::GetShadeTransCol_Dither(uint16_t *pdest
         g = ((XCOL3D(*pdest)) << 3);
 
         if (GlobalTextABR == 0) {
-            r = (r >> 1) + (m1 >> 1);
-            b = (b >> 1) + (m2 >> 1);
-            g = (g >> 1) + (m3 >> 1);
+            r = (r + m1) >> 1;
+            b = (b + m2) >> 1;
+            g = (g + m3) >> 1;
         } else if (GlobalTextABR == 1) {
             r += m1;
             b += m2;
@@ -328,13 +328,9 @@ inline void PCSX::SoftGPU::SoftRenderer::GetShadeTransCol(uint16_t *pdest, uint1
         int32_t r, g, b;
 
         if (GlobalTextABR == 0) {
-            *pdest = ((((*pdest) & 0x7bde) >> 1) + (((color)&0x7bde) >> 1)) | sSetMask;  // 0x8000;
-            return;
-            /*
-                 r=(XCOL1(*pdest)>>1)+((XCOL1(color))>>1);
-                 b=(XCOL2(*pdest)>>1)+((XCOL2(color))>>1);
-                 g=(XCOL3(*pdest)>>1)+((XCOL3(color))>>1);
-            */
+            r = (XCOL1(*pdest) + XCOL1(color)) >> 1;
+            b = (XCOL2(*pdest) + XCOL2(color)) >> 1;
+            g = (XCOL3(*pdest) + XCOL3(color)) >> 1;
         } else if (GlobalTextABR == 1) {
             r = (XCOL1(*pdest)) + ((XCOL1(color)));
             b = (XCOL2(*pdest)) + ((XCOL2(color)));
@@ -374,13 +370,9 @@ inline void PCSX::SoftGPU::SoftRenderer::GetShadeTransCol32(uint32_t *pdest, uin
         int32_t r, g, b;
 
         if (GlobalTextABR == 0) {
-            if (!bCheckMask) {
-                *pdest = ((((*pdest) & 0x7bde7bde) >> 1) + (((color)&0x7bde7bde) >> 1)) | lSetMask;  // 0x80008000;
-                return;
-            }
-            r = (X32ACOL1(*pdest) >> 1) + ((X32ACOL1(color)) >> 1);
-            b = (X32ACOL2(*pdest) >> 1) + ((X32ACOL2(color)) >> 1);
-            g = (X32ACOL3(*pdest) >> 1) + ((X32ACOL3(color)) >> 1);
+            r = (XCOL1(*pdest) + XCOL1(color)) >> 1;
+            b = (XCOL2(*pdest) + XCOL2(color)) >> 1;
+            g = (XCOL3(*pdest) + XCOL3(color)) >> 1;
         } else if (GlobalTextABR == 1) {
             r = (X32COL1(*pdest)) + ((X32COL1(color)));
             b = (X32COL2(*pdest)) + ((X32COL2(color)));
@@ -464,18 +456,13 @@ inline void PCSX::SoftGPU::SoftRenderer::GetTextureTransColG(uint16_t *pdest, ui
 
     if (DrawSemiTrans && (color & 0x8000)) {
         if (GlobalTextABR == 0) {
-            uint16_t d;
-            d = ((*pdest) & 0x7bde) >> 1;
-            color = ((color)&0x7bde) >> 1;
-            r = (XCOL1(d)) + ((((XCOL1(color))) * g_m1) >> 7);
-            b = (XCOL2(d)) + ((((XCOL2(color))) * g_m2) >> 7);
-            g = (XCOL3(d)) + ((((XCOL3(color))) * g_m3) >> 7);
+            r = (((XCOL1(color))) * g_m1) >> 7;
+            b = (((XCOL2(color))) * g_m2) >> 7;
+            g = (((XCOL3(color))) * g_m3) >> 7;
 
-            /*
-                 r=(XCOL1(*pdest)>>1)+((((XCOL1(color))>>1)* g_m1)>>7);
-                 b=(XCOL2(*pdest)>>1)+((((XCOL2(color))>>1)* g_m2)>>7);
-                 g=(XCOL3(*pdest)>>1)+((((XCOL3(color))>>1)* g_m3)>>7);
-            */
+            r = (r + XCOL1(*pdest)) >> 1;
+            b = (b + XCOL2(*pdest)) >> 1;
+            g = (g + XCOL3(*pdest)) >> 1;
         } else if (GlobalTextABR == 1) {
             r = (XCOL1(*pdest)) + ((((XCOL1(color))) * g_m1) >> 7);
             b = (XCOL2(*pdest)) + ((((XCOL2(color))) * g_m2) >> 7);
@@ -546,18 +533,13 @@ inline void PCSX::SoftGPU::SoftRenderer::GetTextureTransColG_SPR(uint16_t *pdest
 
     if (DrawSemiTrans && (color & 0x8000)) {
         if (GlobalTextABR == 0) {
-            uint16_t d;
-            d = ((*pdest) & 0x7bde) >> 1;
-            color = ((color)&0x7bde) >> 1;
-            r = (XCOL1(d)) + ((((XCOL1(color))) * g_m1) >> 7);
-            b = (XCOL2(d)) + ((((XCOL2(color))) * g_m2) >> 7);
-            g = (XCOL3(d)) + ((((XCOL3(color))) * g_m3) >> 7);
+            r = (((XCOL1(color))) * g_m1) >> 7;
+            b = (((XCOL2(color))) * g_m2) >> 7;
+            g = (((XCOL3(color))) * g_m3) >> 7;
 
-            /*
-                 r=(XCOL1(*pdest)>>1)+((((XCOL1(color))>>1)* g_m1)>>7);
-                 b=(XCOL2(*pdest)>>1)+((((XCOL2(color))>>1)* g_m2)>>7);
-                 g=(XCOL3(*pdest)>>1)+((((XCOL3(color))>>1)* g_m3)>>7);
-            */
+            r = (r + XCOL1(*pdest)) >> 1;
+            b = (b + XCOL2(*pdest)) >> 1;
+            g = (g + XCOL3(*pdest)) >> 1;
         } else if (GlobalTextABR == 1) {
             r = (XCOL1(*pdest)) + ((((XCOL1(color))) * g_m1) >> 7);
             b = (XCOL2(*pdest)) + ((((XCOL2(color))) * g_m2) >> 7);
@@ -841,9 +823,9 @@ inline void PCSX::SoftGPU::SoftRenderer::GetTextureTransColGX_Dither(uint16_t *p
         g = ((XCOL3D(*pdest)) << 3);
 
         if (GlobalTextABR == 0) {
-            r = (r >> 1) + (m1 >> 1);
-            b = (b >> 1) + (m2 >> 1);
-            g = (g >> 1) + (m3 >> 1);
+            r = (r + m1) >> 1;
+            b = (b + m2) >> 1;
+            g = (g + m3) >> 1;
         } else if (GlobalTextABR == 1) {
             r += m1;
             b += m2;
@@ -894,17 +876,13 @@ inline void PCSX::SoftGPU::SoftRenderer::GetTextureTransColGX(uint16_t *pdest, u
 
     if (DrawSemiTrans && (color & 0x8000)) {
         if (GlobalTextABR == 0) {
-            uint16_t d;
-            d = ((*pdest) & 0x7bde) >> 1;
-            color = ((color)&0x7bde) >> 1;
-            r = (XCOL1(d)) + ((((XCOL1(color))) * m1) >> 7);
-            b = (XCOL2(d)) + ((((XCOL2(color))) * m2) >> 7);
-            g = (XCOL3(d)) + ((((XCOL3(color))) * m3) >> 7);
-            /*
-                 r=(XCOL1(*pdest)>>1)+((((XCOL1(color))>>1)* m1)>>7);
-                 b=(XCOL2(*pdest)>>1)+((((XCOL2(color))>>1)* m2)>>7);
-                 g=(XCOL3(*pdest)>>1)+((((XCOL3(color))>>1)* m3)>>7);
-            */
+            r = (((XCOL1(color))) * g_m1) >> 7;
+            b = (((XCOL2(color))) * g_m2) >> 7;
+            g = (((XCOL3(color))) * g_m3) >> 7;
+
+            r = (r + XCOL1(*pdest)) >> 1;
+            b = (b + XCOL2(*pdest)) >> 1;
+            g = (g + XCOL3(*pdest)) >> 1;
         } else if (GlobalTextABR == 1) {
             r = (XCOL1(*pdest)) + ((((XCOL1(color))) * m1) >> 7);
             b = (XCOL2(*pdest)) + ((((XCOL2(color))) * m2) >> 7);
