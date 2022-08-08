@@ -111,6 +111,168 @@ extern "C" void pcsxStaticImguiAssert(int exp, const char* msg) {
     if (!exp) thrower(msg);
 }
 
+namespace PCSX {
+class TIMViewer {
+    using ivec2 = OpenGL::ivec2;
+
+    Widgets::FileDialog m_fileDialog = {[]() { return _("Load TIM file"); }};
+    OpenGL::Texture m_texture;
+    IO<File> m_file;
+
+    struct {
+        bool loaded = false;
+        bool hasCLUT = false;
+        ivec2 clutDimensions = ivec2({0, 0});
+        ivec2 clutCoords = ivec2({0, 0});
+        ivec2 imageDimensions = ivec2({0, 0});
+        ivec2 imageCoords = ivec2({0, 0});
+
+        // 0: 4bpp (indexed)
+        // 1: 8bpp (indexed)
+        // 2: 16bpp (direct colour)
+        // 3: 24bpp (direct colour)
+        int bpp = 0;
+    } m_tim;
+
+  public:
+    bool m_show = true;
+    void draw();
+};
+}
+
+
+void PCSX::TIMViewer::draw() {
+    using ivec2 = OpenGL::ivec2;
+
+    if (!ImGui::Begin("TIM Viewer", &m_show)) {
+        ImGui::End();
+    }
+
+    bool openFileDialog = ImGui::Button(_("Load TIM file"));
+    if (openFileDialog) m_fileDialog.openDialog();
+
+    if (m_fileDialog.draw()) {
+        std::vector<PCSX::u8string> filesToOpen = m_fileDialog.selected();
+        for (auto fileName : filesToOpen) {
+            m_file = new PosixFile(reinterpret_cast<const char*>(fileName.c_str()));
+
+            if (m_file->failed()) continue;
+
+            std::vector<uint32_t> colours;
+            std::vector<uint32_t> image;
+            const auto header1 = m_file->read<uint32_t>();
+            const auto header2 = m_file->read<uint32_t>();
+            m_tim.bpp = header2 & 3;
+            m_tim.hasCLUT = (header2 & 0x8) != 0;
+            m_tim.loaded = true;
+
+            if (!m_tim.hasCLUT) abort();
+
+            // Extract CLUT info if present
+            if (m_tim.hasCLUT) {
+                const auto clutLength = m_file->read<uint32_t>();
+                const auto clutCoords = m_file->read<uint32_t>();
+                const auto clutSize = m_file->read<uint32_t>();
+                const int clutX = clutCoords & 0x3ff;
+                const int clutY = (clutCoords >> 16) & 0x1ff;
+
+                const int clutWidth = clutSize & 0x3ff;
+                const int clutHeight = (clutSize >> 16) & 0x1ff;
+                m_tim.clutCoords = ivec2({clutX, clutY});
+                m_tim.clutDimensions = ivec2({clutWidth, clutHeight});
+
+                auto colourCount = clutWidth * clutHeight;
+                colourCount += colourCount & 1;  // Round up colour count to be an even number
+
+                for (int i = 0; i < colourCount; i += 2) {
+                    const auto word = m_file->read<uint32_t>();
+                    const uint16_t col1 = word & 0xffff;
+                    const uint16_t col2 = word >> 16;
+
+                    // Take rgb555 colour and push it to our vector as rgba8888
+                    const auto pushColour = [&colours](uint16_t colour16) {
+                        uint32_t red = colour16 & 0x1f;
+                        uint32_t green = (colour16 >> 5) & 0x1f;
+                        uint32_t blue = (colour16 >> 10) & 0x1f;
+
+                        // Expand colours
+                        red = (red << 3) | (red >> 2);
+                        green = (green << 3) | (green >> 2);
+                        blue = (blue << 3) | (blue >> 2);
+                        uint32_t finalColour = 0xff000000 | (blue << 16) | (green << 8) | red;
+                        colours.push_back(finalColour);
+                    };
+
+                    pushColour(col1);
+                    pushColour(col2);
+                }
+            }
+
+            // Extract image info
+            const auto imageLength = m_file->read<uint32_t>();
+            const auto imageCoords = m_file->read<uint32_t>();
+            const auto imageSize = m_file->read<uint32_t>();
+            const int imageX = imageCoords & 0x3ff;
+            const int imageY = (imageCoords >> 16) & 0x1ff;
+
+            int imageWidth = imageSize & 0x3ff;
+            const int imageHeight = (imageSize >> 16) & 0x1ff;
+
+            if (m_tim.bpp == 0) imageWidth *= 4;
+            else if (m_tim.bpp == 1) imageWidth *= 2;
+
+            m_tim.imageCoords = ivec2({imageX, imageY});
+            m_tim.imageDimensions = ivec2({imageWidth, imageHeight});
+
+            auto pixelCount = imageWidth * imageHeight;
+            pixelCount += pixelCount & 1;  // Round up colour count to be an even number
+
+            // Assume 8bpp for now
+            for (int i = 0; i < pixelCount; i += 4) {
+                uint32_t word = m_file->read<uint32_t>();
+                for (int j = 0; j < 4; j++) {
+                    const auto clutIndex = word & 0xff;
+                    const auto colour = colours[clutIndex];
+                    image.push_back(colour);
+
+                    word >>= 8;
+                }
+            }
+
+            m_texture.create(imageWidth, imageHeight, GL_RGBA8);
+            m_texture.bind();
+            glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, imageWidth, imageHeight, GL_RGBA, GL_UNSIGNED_BYTE, image.data());
+            break;
+        }
+    }
+
+    if (m_tim.loaded) {
+        static std::function<const char*()> const c_colourDepths[] = {
+            []() { return _("4 bpp (indexed)"); },
+            []() { return _("8 bpp (indexed)"); },
+            []() { return _("16 bpp (direct colour)"); },
+            []() { return _("24 bpp (direct colour)"); },
+        };
+        bool hasCLUT = m_tim.hasCLUT;
+
+        ImGui::Text("Colour depth: %s", c_colourDepths[m_tim.bpp]());
+        ImGui::Checkbox("CLUT included", &hasCLUT);
+        ImGui::Text("Texture coordinates: (%d, %d)", m_tim.imageCoords.x(), m_tim.imageCoords.y());
+        ImGui::Text("Texture size: %dx%d", m_tim.imageDimensions.x(), m_tim.imageDimensions.y());
+
+        if (hasCLUT) {
+            ImGui::Text("CLUT coordinates: (%d, %d)", m_tim.clutCoords.x(), m_tim.clutCoords.y());
+            ImGui::Text("CLUT size: %dx%d", m_tim.clutDimensions.x(), m_tim.clutDimensions.y());
+        }
+
+        ImGui::Image((void*)m_texture.handle(), ImVec2(m_texture.width() * 2, m_texture.height() * 2));
+    }
+
+    ImGui::End();
+}
+
+PCSX::TIMViewer m_timViewer;
+
 PCSX::GUI* PCSX::GUI::s_gui = nullptr;
 
 void PCSX::GUI::setFullscreen(bool fullscreen) {
@@ -1174,6 +1336,10 @@ in Configuration->Emulation, restart PCSX-Redux, then try again.)"));
 
     if (m_memcardManager.m_show) {
         changed |= m_memcardManager.draw(this, _("Memory Card Manager"));
+    }
+
+    if (m_timViewer.m_show) {
+        m_timViewer.draw();
     }
 
     if (m_registers.m_show) {
