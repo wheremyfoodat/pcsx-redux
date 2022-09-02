@@ -250,6 +250,7 @@ void DynaRecCPU::recMFC2() {
             auto &delayedLoad = m_delayedLoadInfo[m_currentDelayedLoad];
             const auto delayedLoadValueOffset = (uintptr_t)&delayedLoad.value - (uintptr_t)this;
             delayedLoad.index = _Rt_;
+            delayedLoad.active = true;
             gen.mov(dword[contextPointer + delayedLoadValueOffset], eax);
         }
         return;
@@ -296,6 +297,7 @@ void DynaRecCPU::recCFC2() {
             auto &delayedLoad = m_delayedLoadInfo[m_currentDelayedLoad];
             const auto delayedLoadValueOffset = (uintptr_t)&delayedLoad.value - (uintptr_t)this;
             delayedLoad.index = _Rt_;
+            delayedLoad.active = true;
             gen.mov(dword[contextPointer + delayedLoadValueOffset], eax);
         }
     } else {

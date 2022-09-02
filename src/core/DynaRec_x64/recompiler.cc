@@ -560,14 +560,14 @@ DynaRecCPU::LoadDelayDependencyType DynaRecCPU::getLoadDelayDependencyType(int i
 
     // TODO: Handle LWL/LWR/SWL/SWR delay slots properly
     static constexpr uint8_t mainDependencyList[64] = {
-        NoDep,   DepIfRs, NoDep,   NoDep,   DepIfRsOrRt, DepIfRsOrRt, DepIfRs, DepIfRs,  // 0x0-0x7
-        DepIfRs, DepIfRs, DepIfRs, DepIfRs, DepIfRs,     DepIfRs,     DepIfRs, NoDep,    // 0x8-0xF
-        NoDep,   NoDep,   NoDep,   NoDep,   NoDep,       NoDep,       NoDep,   NoDep,    // 0x10-0x17
-        NoDep,   NoDep,   NoDep,   NoDep,   NoDep,       NoDep,       NoDep,   NoDep,    // 0x18-0x1F
-        DepIfRs, DepIfRs, DepIfRs, DepIfRs, DepIfRs,     DepIfRs,     DepIfRs, NoDep,    // 0x20-0x27
-        DepIfRs, DepIfRs, DepIfRs, DepIfRs, NoDep,       NoDep,       DepIfRs, NoDep,    // 0x28-0x2F
-        DepIfRs, DepIfRs, DepIfRs, DepIfRs, NoDep,       NoDep,       NoDep,   NoDep,    // 0x30-0x37
-        DepIfRs, DepIfRs, DepIfRs, DepIfRs, NoDep,       NoDep,       NoDep,   NoDep,    // 0x38-0x3F
+        NoDep,   DepIfRs, NoDep,       NoDep,   DepIfRsOrRt, DepIfRsOrRt, DepIfRs,     DepIfRs,  // 0x0-0x7
+        DepIfRs, DepIfRs, DepIfRs,     DepIfRs, DepIfRs,     DepIfRs,     DepIfRs,     NoDep,    // 0x8-0xF
+        NoDep,   NoDep,   NoDep,       NoDep,   NoDep,       NoDep,       NoDep,       NoDep,    // 0x10-0x17
+        NoDep,   NoDep,   NoDep,       NoDep,   NoDep,       NoDep,       NoDep,       NoDep,    // 0x18-0x1F
+        DepIfRs, DepIfRs, DepIfRs,     DepIfRs, DepIfRs,     DepIfRs,     DepIfRs,     NoDep,    // 0x20-0x27
+        DepIfRs, DepIfRs, DepIfRsOrRt, DepIfRs, NoDep,       NoDep,       DepIfRsOrRt, NoDep,    // 0x28-0x2F
+        DepIfRs, DepIfRs, DepIfRs,     DepIfRs, NoDep,       NoDep,       NoDep,       NoDep,    // 0x30-0x37
+        DepIfRs, DepIfRs, DepIfRs,     DepIfRs, NoDep,       NoDep,       NoDep,       NoDep,    // 0x38-0x3F
     };
 
     static constexpr uint8_t specialDependencyList[64] = {
