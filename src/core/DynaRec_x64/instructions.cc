@@ -735,6 +735,7 @@ void DynaRecCPU::recompileLoadWithDelay(LoadDelayDependencyType type) {
 template <int size, bool signExtend>
 void DynaRecCPU::recompileLoad() {
     static_assert(size == 8 || size == 16 || size == 32);
+    m_blockCycles++;  // Take one extra cycle for memory access
 
     const auto loadDelayDependency = getLoadDelayDependencyType(_Rt_);
     if (loadDelayDependency != LoadDelayDependencyType::NoDependency) {
@@ -799,6 +800,7 @@ void DynaRecCPU::recLHU() { recompileLoad<16, false>(); }
 void DynaRecCPU::recLW() { recompileLoad<32, true>(); }
 
 void DynaRecCPU::recLWL() {
+    m_blockCycles++;
     if (_Rt_ == 0) {  // If $rt == 0, just execute the read in case it has side-effects, then return
         if (m_gprs[_Rs_].isConst()) {
             const uint32_t address = m_gprs[_Rs_].val + _Imm_;
@@ -892,6 +894,7 @@ void DynaRecCPU::recLWL() {
 }
 
 void DynaRecCPU::recLWR() {
+    m_blockCycles++;
     if (_Rt_ == 0) {  // If $rt == 0, just execute the read in case it has side-effects, then return
         if (m_gprs[_Rs_].isConst()) {
             const uint32_t address = m_gprs[_Rs_].val + _Imm_;
@@ -985,6 +988,7 @@ void DynaRecCPU::recLWR() {
 }
 
 void DynaRecCPU::recSB() {
+    m_blockCycles++;
     if (m_gprs[_Rs_].isConst()) {
         const uint32_t addr = m_gprs[_Rs_].val + _Imm_;
         const auto pointer = PCSX::g_emulator->m_mem->pointerWrite(addr, 8);
@@ -1026,6 +1030,7 @@ void DynaRecCPU::recSB() {
 }
 
 void DynaRecCPU::recSH() {
+    m_blockCycles++;
     if (m_gprs[_Rs_].isConst()) {
         const uint32_t addr = m_gprs[_Rs_].val + _Imm_;
         const auto pointer = PCSX::g_emulator->m_mem->pointerWrite(addr, 16);
@@ -1091,6 +1096,7 @@ void DynaRecCPU::recSH() {
 }
 
 void DynaRecCPU::recSW() {
+    m_blockCycles++;
     if (m_gprs[_Rs_].isConst()) {
         const uint32_t addr = m_gprs[_Rs_].val + _Imm_;
         const auto pointer = PCSX::g_emulator->m_mem->pointerWrite(addr, 32);
@@ -1131,6 +1137,7 @@ void DynaRecCPU::recSW() {
 }
 
 void DynaRecCPU::recSWL() {
+    m_blockCycles += 2; // 2 extra memory accesses, so add 2 cycles
     // The mask to be applied to $rt (top 32 bits) and the shift to be applied to the read memory value (low 32 bits)
     // Depending on the low 3 bits of the unaligned address
     static const uint64_t MASKS_AND_SHIFTS[4] = {0xFFFFFF0000000018, 0xFFFF000000000010, 0xFF00000000000008, 0};
@@ -1237,6 +1244,7 @@ void DynaRecCPU::recSWL() {
 }
 
 void DynaRecCPU::recSWR() {
+    m_blockCycles += 2;  // 2 extra memory accesses, so add 2 cycles
     // The mask to be applied to $rt (top 32 bits) and the shift to be applied to the read memory value (low 32 bits)
     // Depending on the low 3 bits of the unaligned address
     static const uint64_t MASKS_AND_SHIFTS[4] = {0, 0x000000FF00000008, 0x0000FFFF00000010, 0x00FFFFFF00000018};

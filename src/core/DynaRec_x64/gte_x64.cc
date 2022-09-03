@@ -309,6 +309,7 @@ void DynaRecCPU::recCFC2() {
 }
 
 void DynaRecCPU::recLWC2() {
+    m_blockCycles++;
     if (m_gprs[_Rs_].isConst()) {  // Store address in arg2
         gen.mov(arg2, m_gprs[_Rs_].val + _Imm_);
     } else {
@@ -365,6 +366,7 @@ void DynaRecCPU::recLWC2() {
 }
 
 void DynaRecCPU::recSWC2() {
+    m_blockCycles++;
     loadGTEDataRegister(arg3, _Rt_);  // Load the register we'll write to memory in arg3
 
     // Address in arg2

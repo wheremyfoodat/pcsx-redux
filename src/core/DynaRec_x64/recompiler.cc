@@ -324,12 +324,12 @@ DynarecCallback DynaRecCPU::recompile(uint32_t pc, bool fullLoadDelayEmulation, 
     m_pc = pc & ~3;
     m_firstInstruction = true;
     m_fullLoadDelayEmulation = fullLoadDelayEmulation;
+    m_blockCycles = 0;
 
     // If we somehow ended up compiling a block at an invalid PC, throw an error.
     if (!isPcValid(m_pc)) return m_invalidBlock;
 
     const auto startingPC = m_pc;
-    int count = 0;                                      // How many instructions have we compiled?
     DynarecCallback* callback = getBlockPointer(m_pc);  // Pointer to where we'll store the addr of the emitted code
 
     if (align) {
@@ -370,7 +370,7 @@ DynarecCallback DynaRecCPU::recompile(uint32_t pc, bool fullLoadDelayEmulation, 
         if (m_stopCompiling) {
             return false;
         }
-        if (count >= MAX_BLOCK_SIZE && !m_delayedLoadInfo[0].active && !m_delayedLoadInfo[1].active) {
+        if (m_blockCycles >= MAX_BLOCK_CYCLES && !m_delayedLoadInfo[0].active && !m_delayedLoadInfo[1].active) {
             return false;
         }
         return true;
@@ -398,7 +398,7 @@ DynarecCallback DynaRecCPU::recompile(uint32_t pc, bool fullLoadDelayEmulation, 
         // Fetch instruction. We make sure this function is called with a valid PC, otherwise it will crash
         m_regs.code = *(uint32_t*)PSXM(m_pc);
         m_pc += 4;  // Increment recompiler PC
-        count++;    // Increment instruction count
+        m_blockCycles += PCSX::g_emulator->BIAS;
 
         const auto func = m_recBSC[m_regs.code >> 26];  // Look up the opcode in our decoding LUT
         (*this.*func)();                                // Jump into the handler to recompile it
@@ -446,7 +446,7 @@ DynarecCallback DynaRecCPU::recompile(uint32_t pc, bool fullLoadDelayEmulation, 
         endProfiling();
     }
 
-    gen.add(dword[contextPointer + CYCLE_OFFSET], count * PCSX::Emulator::BIAS);  // Add block cycles;
+    gen.add(dword[contextPointer + CYCLE_OFFSET], m_blockCycles);
     if (m_linkedPC && ENABLE_BLOCK_LINKING && m_linkedPC.value() != startingPC) {
         handleLinking();
     } else {

@@ -77,6 +77,7 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
 
     Emitter gen;
     uint32_t m_pc;  // Recompiler PC
+    uint32_t m_blockCycles; // Cycles this block takes to run
 
     bool m_stopCompiling;  // Should we stop compiling code?
     bool m_pcWrittenBack;  // Has the PC been written back already by a jump?
@@ -92,7 +93,7 @@ class DynaRecCPU final : public PCSX::R3000Acpu {
         uint32_t value;
     } m_runtimeLoadDelay;
 
-    const int MAX_BLOCK_SIZE = 50;
+    const int MAX_BLOCK_CYCLES = 50 * PCSX::g_emulator->BIAS;
 
     enum class RegState { Unknown, Constant };
     enum class LoadingMode { DoNotLoad, Load };

@@ -171,7 +171,6 @@ void PCSX::Memory::shutdown() {
 }
 
 uint8_t PCSX::Memory::read8(uint32_t address) {
-    PCSX::g_emulator->m_cpu->m_regs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)m_readLUT[page];
 
@@ -192,7 +191,6 @@ uint8_t PCSX::Memory::read8(uint32_t address) {
 }
 
 uint16_t PCSX::Memory::read16(uint32_t address) {
-    PCSX::g_emulator->m_cpu->m_regs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)m_readLUT[page];
 
@@ -213,7 +211,6 @@ uint16_t PCSX::Memory::read16(uint32_t address) {
 }
 
 uint32_t PCSX::Memory::read32(uint32_t address) {
-    PCSX::g_emulator->m_cpu->m_regs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)m_readLUT[page];
 
@@ -236,7 +233,6 @@ uint32_t PCSX::Memory::read32(uint32_t address) {
 }
 
 void PCSX::Memory::write8(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_cpu->m_regs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)m_writeLUT[page];
 
@@ -257,7 +253,6 @@ void PCSX::Memory::write8(uint32_t address, uint32_t value) {
 }
 
 void PCSX::Memory::write16(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_cpu->m_regs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)m_writeLUT[page];
 
@@ -278,7 +273,6 @@ void PCSX::Memory::write16(uint32_t address, uint32_t value) {
 }
 
 void PCSX::Memory::write32(uint32_t address, uint32_t value) {
-    PCSX::g_emulator->m_cpu->m_regs.cycle += 1;
     const uint32_t page = address >> 16;
     const auto pointer = (uint8_t *)m_writeLUT[page];
 
