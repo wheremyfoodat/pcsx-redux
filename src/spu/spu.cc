@@ -840,15 +840,6 @@ void PCSX::SPU::impl::writeCaptureBufferCD(int numbSamples) {
     }
 }
 
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////
-
-////////////////////////////////////////////////////////////////////////
-// SPU ASYNC... even newer epsxe func
-//  1 time every 'cycle' cycles... harhar
-////////////////////////////////////////////////////////////////////////
-
 void PCSX::SPU::impl::async(uint32_t cycle) {
     if (iSpuAsyncWait) {
         iSpuAsyncWait++;
@@ -857,10 +848,6 @@ void PCSX::SPU::impl::async(uint32_t cycle) {
     }
 }
 
-////////////////////////////////////////////////////////////////////////
-// XA AUDIO
-////////////////////////////////////////////////////////////////////////
-
 void PCSX::SPU::impl::playADPCMchannel(xa_decode_t *xap) {
     if (!settings.get<Streaming>()) return;  // no XA? bye
     if (!xap) return;
@@ -868,10 +855,6 @@ void PCSX::SPU::impl::playADPCMchannel(xa_decode_t *xap) {
 
     FeedXA(xap);  // call main XA feeder
 }
-
-////////////////////////////////////////////////////////////////////////
-// INIT/EXIT STUFF
-////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////
 // SPUINIT: this func will be called first by the main emu
@@ -896,10 +879,6 @@ void PCSX::SPU::impl::wipeChannels() {
     memset((void *)&rvb, 0, sizeof(REVERBInfo));
 }
 
-////////////////////////////////////////////////////////////////////////
-// SETUPTIMER: init of certain buffers and threads/timers
-////////////////////////////////////////////////////////////////////////
-
 void PCSX::SPU::impl::SetupThread() {
     memset(SSumR, 0, NSSIZE * sizeof(int));  // init some mixing buffers
     memset(SSumL, 0, NSSIZE * sizeof(int));
@@ -914,10 +893,6 @@ void PCSX::SPU::impl::SetupThread() {
     hMainThread = std::thread([this]() { MainThread(); });
 }
 
-////////////////////////////////////////////////////////////////////////
-// REMOVETIMER: kill threads/timers
-////////////////////////////////////////////////////////////////////////
-
 void PCSX::SPU::impl::RemoveThread() {
     bEndThread = 1;  // raise flag to end thread
     hMainThread.join();
@@ -925,10 +900,6 @@ void PCSX::SPU::impl::RemoveThread() {
     bThreadEnded = 0;  // no more spu is running
     bSpuInit = 0;
 }
-
-////////////////////////////////////////////////////////////////////////
-// SETUPSTREAMS: init most of the spu buffers
-////////////////////////////////////////////////////////////////////////
 
 void PCSX::SPU::impl::SetupStreams() {
     int i;
@@ -947,9 +918,6 @@ void PCSX::SPU::impl::SetupStreams() {
 
     for (i = 0; i < MAXCHAN; i++)  // loop sound channels
     {
-        // we don't use mutex sync... not needed, would only
-        // slow us down:
-        //   s_chan[i].hMutex=CreateMutex(NULL,FALSE,NULL);
         s_chan[i].ADSRX.get<exSustainLevel>().value = 0xf << 27;  // -> init sustain
         s_chan[i].data.get<PCSX::SPU::Chan::Mute>().value = false;
         s_chan[i].data.get<PCSX::SPU::Chan::Solo>().value = false;
@@ -960,10 +928,6 @@ void PCSX::SPU::impl::SetupStreams() {
     }
 }
 
-////////////////////////////////////////////////////////////////////////
-// REMOVESTREAMS: free most buffer
-////////////////////////////////////////////////////////////////////////
-
 void PCSX::SPU::impl::RemoveStreams(void) {
     free(pSpuBuffer);  // free mixing buffer
     pSpuBuffer = NULL;
@@ -971,10 +935,7 @@ void PCSX::SPU::impl::RemoveStreams(void) {
     sRVBStart = 0;
 }
 
-////////////////////////////////////////////////////////////////////////
 // SPUOPEN: called by main emu after init
-////////////////////////////////////////////////////////////////////////
-
 bool PCSX::SPU::impl::open() {
     if (bSPUIsOpen) return true;  // security for some stupid main emus
 
@@ -988,18 +949,13 @@ bool PCSX::SPU::impl::open() {
     wipeChannels();
     pSpuIrq = 0;
 
-    //    ReadConfig();  // read user stuff
-
-    SetupStreams();  // prepare streaming
-
-    SetupThread();  // timer for feeding data
-
+    SetupStreams();
+    SetupThread();
     bSPUIsOpen = 1;
 
     m_lastUpdated = std::chrono::steady_clock::now();
 
     resetCaptureBuffer();
-
     return true;
 }
 
