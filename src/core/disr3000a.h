@@ -36,6 +36,7 @@ class Disasm {
     static const char *s_disRNameCP2D[];
     static const char *s_disRNameCP2C[];
     static const char *s_disRNameCP0[];
+    static const char *getSyscallName(uint32_t index);
 
 #define declare(n) \
     void n(uint32_t code, uint32_t nextCode, uint32_t pc, bool *skipNext = nullptr, bool *delaySlotNext = nullptr)

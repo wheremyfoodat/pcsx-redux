@@ -57,6 +57,19 @@ const char *PCSX::Disasm::s_disRNameCP0[] = {
     "TagLo",    "TagHi",  "ErrorEPC", "*RES*",     // 1c
 };
 
+const char *PCSX::Disasm::getSyscallName(uint32_t index) {
+    switch (index) {
+        case 0:
+            return "NOP";
+        case 1:
+            return "EnterCriticalSection";
+        case 2:
+            return "ExitCriticalSection";
+        default:
+            return "DeliverEvent";
+    }
+}
+
 #undef declare
 #undef _Funct_
 #undef _Rd_
@@ -691,8 +704,8 @@ bool PCSX::Disasm::disLI(uint32_t reg, uint32_t imm, uint32_t nextCode, bool *sk
     uint8_t nextSubfunc = nextCode & 0x3f;
 
     if (skipNext && reg == 4 && nextIns == 0 && nextSubfunc == 0xC) {
-        dOpCode("syscall #");
-        SyscallName("meow");
+        dOpCode("syscall");
+        SyscallName(getSyscallName(imm));
 
         *skipNext = true;
         return true;
