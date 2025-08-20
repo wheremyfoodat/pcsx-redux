@@ -226,6 +226,7 @@ struct StringDisasm : public PCSX::Disasm {
             }
         }
     }
+    virtual void SyscallName(const char *name) final { append(name); }
     virtual void reset() final {
         m_buf[0] = 0;
         m_len = 0;
@@ -691,7 +692,7 @@ bool PCSX::Disasm::disLI(uint32_t reg, uint32_t imm, uint32_t nextCode, bool *sk
 
     if (skipNext && reg == 4 && nextIns == 0 && nextSubfunc == 0xC) {
         dOpCode("syscall #");
-        Imm16u(imm);
+        SyscallName("meow");
 
         *skipNext = true;
         return true;
