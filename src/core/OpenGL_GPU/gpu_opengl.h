@@ -135,7 +135,9 @@ class OpenGL_GPU final : public GPU {
     uint32_t m_rectTexpage = 0;  // Rects have their own texpage settings
     uint32_t m_lastTexwindowSetting = 0;
     uint32_t m_lastDrawOffsetSetting = 0;
-    uint32_t m_drawMode;
+    uint32_t m_drawMode = 0;
+    uint32_t m_setMaskBit = 0;
+    uint32_t m_checkMaskBit = 0;
 
     template <int count>
     void maybeRenderBatch() {

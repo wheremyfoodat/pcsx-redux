@@ -39,6 +39,8 @@ void PCSX::OpenGL_GPU::resetBackend() {
     m_lastTransparency = Transparency::Opaque;
     m_lastBlendingMode = -1;
     m_drawMode = 0;
+    m_setMaskBit = 0;
+    m_checkMaskBit = 0;
     m_rectTexpage = 0;
     m_vertexCount = 0;
     m_syncVRAM = true;
@@ -856,7 +858,10 @@ void PCSX::OpenGL_GPU::setTexWindow(uint32_t cmd) {
 
 void PCSX::OpenGL_GPU::write0(TWindow *prim) { setTexWindow(prim->raw); }
 
-void PCSX::OpenGL_GPU::write0(MaskBit *) {}
+void PCSX::OpenGL_GPU::write0(MaskBit *prim) {
+    m_setMaskBit = prim->set;
+    m_checkMaskBit = prim->check;
+}
 
 void PCSX::OpenGL_GPU::write0(DrawingAreaStart *prim) {
     m_drawAreaLeft = prim->x;
