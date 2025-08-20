@@ -920,13 +920,6 @@ void PCSX::SPU::impl::SetupThread() {
 
 void PCSX::SPU::impl::RemoveThread() {
     bEndThread = 1;  // raise flag to end thread
-
-    using namespace std::chrono_literals;
-    while (!bThreadEnded) {
-        std::this_thread::sleep_for(5ms);
-    }  // -> wait till thread has ended
-    std::this_thread::sleep_for(5ms);
-
     hMainThread.join();
 
     bThreadEnded = 0;  // no more spu is running
