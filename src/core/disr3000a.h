@@ -188,6 +188,9 @@ class Disasm {
     declare(disGPL);
     declare(disNCCT);
 #undef declare
+
+    // li has a slightly different signature, being a pseudoinstruction
+    bool disLI(uint32_t reg, uint32_t imm, uint32_t nextCode, bool *skipNext = nullptr, bool *delaySlotNext = nullptr);
 };
 
 }  // namespace PCSX

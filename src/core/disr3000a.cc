@@ -281,8 +281,9 @@ declare(disADDI) {
 declare(disADDIU) {
     if (_Rs_ == 0) {
         // this is the common pseudo-instruction to load an immediate 16 bits value
-        dOpCode("li");
-        GPR(_Rt_);
+        if (disLI(_Rt_, _Im_, nextCode, skipNext, delaySlotNext)) {
+            return;
+        }
     } else {
         dOpCode("addiu");
         GPR(_Rt_);
@@ -299,8 +300,9 @@ declare(disANDI) {
 declare(disORI) {
     if (_Rs_ == 0) {
         // while rare, this can also be used to load an immediate 16-bits value
-        dOpCode("li");
-        GPR(_Rt_);
+        if (disLI(_Rt_, _Im_, nextCode, skipNext, delaySlotNext)) {
+            return;
+        }
     } else {
         dOpCode("ori");
         GPR(_Rt_);
@@ -680,6 +682,27 @@ declare(disLUI) {
     }
 }
 
+bool PCSX::Disasm::disLI(uint32_t reg, uint32_t imm, uint32_t nextCode, bool *skipNext, bool *delaySlotNext) {
+    // Merge syscalls, which usually have the pattern
+    // li $a0, syscallNumber
+    // syscall 0x0000
+    uint8_t nextIns = nextCode >> 26;
+    uint8_t nextSubfunc = nextCode & 0x3f;
+
+    if (skipNext && reg == 4 && nextIns == 0 && nextSubfunc == 0xC) {
+        dOpCode("syscall #");
+        Imm16u(imm);
+
+        *skipNext = true;
+        return true;
+    } else {
+        dOpCode("li");
+        GPR(reg);
+
+        return false;
+    }
+}
+
 /*********************************************************
  * Move from HI/LO to GPR                                 *
  * Format:  OP rd                                         *
@@ -969,7 +992,7 @@ declare(disCTC0) {
 }
 
 /*********************************************************
- * Unknow instruction (would generate an exception)       *
+ * Unknown instruction (would generate an exception)      *
  * Format:  ?                                             *
  *********************************************************/
 declare(disNULL) {
